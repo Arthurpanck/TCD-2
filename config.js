@@ -47,6 +47,7 @@ const TCDConfig = (function () {
     $id('col-order').addEventListener('change', e => app.update({ colOrder: e.target.value }));
     $id('row-totals').addEventListener('change', e => app.update({ rowTotals: e.target.checked }));
     $id('col-totals').addEventListener('change', e => app.update({ colTotals: e.target.checked }));
+    $id('subtotals').addEventListener('change', e => app.update({ subtotals: e.target.checked }));
     $id('heat-scope').addEventListener('change', e => app.update({ rendererName: rendererName('heat', e.target.value) }));
     $id('decimals').addEventListener('change', e => app.update({ decimals: e.target.value }));
     $id('scale').addEventListener('change', e => app.update({ scale: Number(e.target.value) }));
@@ -350,6 +351,7 @@ const TCDConfig = (function () {
     $id('col-order').value = s.colOrder;
     $id('row-totals').checked = s.rowTotals;
     $id('col-totals').checked = s.colTotals;
+    $id('subtotals').checked = s.subtotals;
     $id('decimals').value = String(s.decimals);
     $id('scale').value = String(s.scale);
     if (document.activeElement !== $id('suffix')) { $id('suffix').value = s.suffix; }

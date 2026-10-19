@@ -360,14 +360,23 @@ table.pvtTable thead th.pvtAxisLabel {
   text-transform: uppercase;
 }
 table.pvtTable thead th.pvtColLabel { text-align: right; }
-table.pvtTable th.pvtCorner {
-  color: var(--accent-strong);
+table.pvtTable thead th.pvtColAxis {
+  z-index: 4;
+  text-align: right;
+  text-transform: none;
+  letter-spacing: 0;
   font-size: .85em;
-  font-weight: 650;
-  vertical-align: top;
+  font-weight: 600;
 }
-table.pvtTable .is-sticky-left { position: sticky; z-index: 3; }
-table.pvtTable thead .is-sticky-left { z-index: 4; }
+table.pvtTable th.pvtColAxis .corner-agg {
+  float: left;
+  margin-right: 16px;
+  color: var(--accent-strong);
+  font-weight: 650;
+}
+table.pvtTable th.pvtColAxis .axis-name { color: var(--text-subtle); }
+table.pvtTable thead th.pvtRowAxis { z-index: 4; }
+table.pvtTable thead th.pvtColLabel.is-group { text-align: center; border-bottom-color: var(--border); }
 
 /* Libellés de lignes */
 table.pvtTable tbody th.pvtRowLabel {
@@ -399,6 +408,37 @@ table.pvtTable td.is-selected {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+table.pvtTable td.pvtVal:empty::after { content: "–"; color: var(--text-subtle); }
+
+/* Sous-totaux et groupes repliables */
+table.pvtTable tr.pvtSubtotalRow > * { background: var(--surface-2); font-weight: 650; }
+table.pvtTable tr.pvtSubtotalRow.level-0 > * { background: var(--surface-3); }
+table.pvtTable tr.pvtSubtotalRow.is-collapsed > * { background: var(--surface); font-weight: 650; }
+table.pvtTable td.pvtSubtotal { text-align: right; font-variant-numeric: tabular-nums; cursor: pointer; }
+table.pvtTable td.pvtSubtotal:empty::after { content: "–"; color: var(--text-subtle); }
+table.pvtTable td.pvtSubtotal.is-col-hover { filter: brightness(.97); }
+table.pvtTable th.pvtSubtotalLabel { color: var(--text); }
+.grp-toggle {
+  display: inline-grid; place-items: center;
+  width: 18px; height: 18px;
+  margin: -2px 6px -2px -4px;
+  padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: var(--text-subtle);
+  vertical-align: middle;
+  cursor: pointer;
+}
+.grp-toggle::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-right: 1.75px solid currentColor; border-bottom: 1.75px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+  transition: transform .12s;
+}
+.grp-toggle[aria-expanded="false"]::before { transform: translateX(-1px) rotate(-45deg); }
+.grp-toggle:hover { background: var(--surface-3); color: var(--text); }
+.grp-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+table.pvtTable tr.pvtMoreRow td { padding: 10px; text-align: center; background: var(--surface); }
+
 /* Totaux */
 table.pvtTable .pvtTotal, table.pvtTable .pvtTotalLabel, table.pvtTable .pvtGrandTotal {
   background: var(--surface-2);
@@ -417,7 +457,7 @@ table.pvtTable tr.pvtTotalsRow > * {
   border-top: 1px solid var(--border-strong);
   border-bottom: 0;
 }
-table.pvtTable tr.pvtTotalsRow > .is-sticky-left, table.pvtTable tr.pvtTotalsRow > .pvtGrandTotal { z-index: 3; }
+table.pvtTable tr.pvtTotalsRow > .pvtColTotalLabel, table.pvtTable tr.pvtTotalsRow > .pvtGrandTotal { z-index: 3; }
 table.pvtTable td.pvtGrandTotal { background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
 
 /* Carte de chaleur (couleurs dérivées de l'accent : fonctionne en clair comme en sombre) */

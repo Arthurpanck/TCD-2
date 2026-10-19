@@ -19,6 +19,7 @@ const DEFAULTS = {
   colOrder: 'key_a_to_z',
   rowTotals: true,
   colTotals: true,
+  subtotals: true,
   decimals: 'auto',
   scale: 1,
   suffix: '',
@@ -36,6 +37,9 @@ const state = {
   configOpen: false,
   snapshot: null,
   pd: null,
+  cellInfo: new WeakMap(),
+  // État d'affichage propre à la session (non enregistré) : groupes repliés, nombre de lignes affichées
+  view: { collapsed: new Set(), rowLimit: 0 },
   aggLabel: '',
   saveTimer: null,
   savePending: false,
@@ -61,6 +65,7 @@ function normalizeSettings(raw, legacy = {}) {
   if (!ORDERS.includes(s.colOrder)) { s.colOrder = DEFAULTS.colOrder; }
   s.rowTotals = s.rowTotals !== false;
   s.colTotals = s.colTotals !== false;
+  s.subtotals = s.subtotals !== false;
   s.scale = [1, 1e3, 1e6].includes(Number(s.scale)) ? Number(s.scale) : 1;
   s.suffix = typeof s.suffix === 'string' ? s.suffix : '';
   if (!['auto', '0', '1', '2', 0, 1, 2].includes(s.decimals)) { s.decimals = 'auto'; }
@@ -95,6 +100,9 @@ function effectiveSettings() {
 }
 
 function update(patch) {
+  if (patch.rows && patch.rows.join('\0') !== state.settings.rows.join('\0')) {
+    state.view.collapsed.clear();
+  }
   state.settings = normalizeSettings({ ...state.settings, ...patch });
   applyAppearance();
   TCDConfig.refresh();
@@ -176,8 +184,10 @@ function render() {
 
   let table;
   try {
-    state.pd = TCDRender.buildPivotData(state.dataset, s);
-    table = TCDRender.renderTable(state.pd, s, state.aggLabel);
+    const result = TCDRender.render(state.dataset, s, state.aggLabel, state.view);
+    state.pd = result.pd;
+    state.cellInfo = result.info;
+    table = result.table;
   } catch (e) {
     console.error(e);
     renderSummary(s);
@@ -247,11 +257,11 @@ function renderSummary(s) {
 let colCells = new Map();
 function indexColumns(table) {
   colCells = new Map();
-  table.querySelectorAll('td.pvtVal').forEach(td => {
-    const m = /\bcol(\d+)\b/.exec(td.className);
-    if (!m) { return; }
-    if (!colCells.has(m[1])) { colCells.set(m[1], []); }
-    colCells.get(m[1]).push(td);
+  table.querySelectorAll('td.pvtVal, td.pvtSubtotal').forEach(td => {
+    const j = td.dataset.col;
+    if (j === undefined) { return; }
+    if (!colCells.has(j)) { colCells.set(j, []); }
+    colCells.get(j).push(td);
   });
 }
 
@@ -260,22 +270,7 @@ function indexColumns(table) {
 // ---------------------------------------------------------------------------
 
 function cellKeys(td) {
-  const pd = state.pd;
-  if (!pd) { return null; }
-  const rowKeys = pd.getRowKeys(), colKeys = pd.getColKeys();
-  let rowKey = [], colKey = [];
-  const r = /\brow(\d+)\b/.exec(td.className), c = /\bcol(\d+)\b/.exec(td.className);
-  if (td.classList.contains('pvtVal')) {
-    rowKey = rowKeys[r[1]] || [];
-    colKey = colKeys[c[1]] || [];
-  } else if (td.classList.contains('rowTotal')) {
-    rowKey = rowKeys[td.dataset.for.slice(3)] || [];
-  } else if (td.classList.contains('colTotal')) {
-    colKey = colKeys[td.dataset.for.slice(3)] || [];
-  } else if (!td.classList.contains('pvtGrandTotal')) {
-    return null;
-  }
-  return { rowKey, colKey };
+  return state.cellInfo.get(td) || null;
 }
 
 function criteriaFor(keys) {
@@ -299,8 +294,7 @@ function setHoverCol(key) {
 function showTooltip(td, x, y) {
   const keys = cellKeys(td);
   if (!keys) { return; }
-  const pd = state.pd;
-  const agg = pd.getAggregator(keys.rowKey, keys.colKey);
+  const agg = keys.agg;
   const lines = Object.entries(criteriaFor(keys)).map(([a, v]) => el('div', { class: 'tt-line' }, el('span', {}, label(a)), el('b', {}, String(v))));
   tooltip.replaceChildren(
     ...(lines.length ? lines : [el('div', { class: 'tt-line' }, el('span', {}, 'Ensemble des données'))]),
@@ -323,12 +317,11 @@ function hideTooltip() {
 function setupTableInteractions() {
   const out = $id('output');
   out.addEventListener('mouseover', e => {
-    const td = e.target.closest('td');
-    const m = td && td.classList.contains('pvtVal') ? /\bcol(\d+)\b/.exec(td.className) : null;
-    setHoverCol(m ? m[1] : null);
+    const td = e.target.closest('td.pvtVal, td.pvtSubtotal');
+    setHoverCol(td && td.dataset.col !== undefined ? td.dataset.col : null);
   });
   out.addEventListener('mousemove', e => {
-    const td = e.target.closest('td.pvtVal, td.pvtTotal, td.pvtGrandTotal');
+    const td = e.target.closest('td.pvtVal, td.pvtSubtotal, td.pvtTotal, td.pvtGrandTotal');
     hideTooltip();
     if (!td || document.body.classList.contains('is-dragging')) { return; }
     tooltipTimer = setTimeout(() => showTooltip(td, e.clientX, e.clientY), 350);
@@ -336,7 +329,13 @@ function setupTableInteractions() {
   out.addEventListener('mouseleave', () => { setHoverCol(null); hideTooltip(); });
   out.addEventListener('scroll', hideTooltip, { passive: true });
   out.addEventListener('click', e => {
-    const td = e.target.closest('td.pvtVal, td.pvtTotal, td.pvtGrandTotal');
+    const toggle = e.target.closest('.grp-toggle');
+    if (toggle) { return toggleGroup(toggle.dataset.group); }
+    if (e.target.closest('[data-action="show-all"]')) {
+      state.view.rowLimit = Infinity;
+      return scheduleRender();
+    }
+    const td = e.target.closest('td.pvtVal, td.pvtSubtotal, td.pvtTotal, td.pvtGrandTotal');
     if (td) { hideTooltip(); openDrawer(td); }
   });
 
@@ -351,16 +350,30 @@ function setupTableInteractions() {
   }).observe(out);
 }
 
+function toggleGroup(key) {
+  const c = state.view.collapsed;
+  c.has(key) ? c.delete(key) : c.add(key);
+  scheduleRender();
+}
+
+/** Replie (ou déplie) tous les groupes du premier niveau */
+function setAllCollapsed(collapse) {
+  state.view.collapsed = new Set();
+  if (collapse && state.pd) {
+    for (const key of state.pd.getRowKeys()) { state.view.collapsed.add(String(key[0])); }
+  }
+  scheduleRender();
+}
+
 let selectedTd = null;
 
 function openDrawer(td) {
   const keys = cellKeys(td);
   if (!keys) { return; }
-  const pd = state.pd;
   const criteria = criteriaFor(keys);
   const records = [];
-  pd.forEachMatchingRecord(criteria, rec => { records.push(rec); });
-  const agg = pd.getAggregator(keys.rowKey, keys.colKey);
+  state.pd.forEachMatchingRecord(criteria, rec => { records.push(rec); });
+  const agg = keys.agg;
 
   if (selectedTd) { selectedTd.classList.remove('is-selected'); }
   selectedTd = td;
@@ -433,6 +446,10 @@ function openDisplayMenu(anchor) {
     el('div', { class: 'menu-title' }, 'Mise en forme'),
     seg([['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']], r.kind,
       v => update({ rendererName: TCDConfig.rendererName(v, r.scope) })),
+    s.subtotals && s.rows.length > 1 ? el('div', { class: 'menu-title' }, 'Groupes') : null,
+    s.subtotals && s.rows.length > 1 ? el('div', { class: 'segmented' },
+      el('button', { type: 'button', onclick: () => { setAllCollapsed(true); UI.closePopover(); } }, 'Tout replier'),
+      el('button', { type: 'button', onclick: () => { setAllCollapsed(false); UI.closePopover(); } }, 'Tout déplier')) : null,
     el('div', { class: 'menu-title' }, 'Densité'),
     seg([['compact', 'Compacte'], ['standard', 'Standard'], ['comfortable', 'Aérée']], s.density, v => update({ density: v })),
     el('div', { class: 'menu-title' }, 'Taille du texte'),

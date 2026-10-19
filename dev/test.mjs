@@ -134,7 +134,7 @@ await test('filtre de valeurs : exclusion, résumé et enregistrement', async ()
 
 await test('détail d’une cellule et sélection transmise aux widgets liés', async () => {
   const page = await open({ settings: { ...base, cols: ['Statut'] } });
-  await page.click('td.pvtVal.row0.col0');
+  await page.click('td.pvtVal[data-row="0"][data-col="0"]');
   await page.waitForTimeout(250);
   assert(await page.locator('#drawer').isVisible(), 'panneau de détail absent');
   const n = await page.locator('.detail-table tbody tr').count();
@@ -144,6 +144,31 @@ await test('détail d’une cellule et sélection transmise aux widgets liés', 
   await page.waitForTimeout(300);
   assert(await page.locator('#drawer').isHidden(), 'Échap doit fermer le détail');
   assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'la sélection doit être réinitialisée');
+  await page.close();
+});
+
+await test('sous-totaux par groupe, repli et dépli', async () => {
+  const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'] } });
+  assert(await page.locator('tr.pvtSubtotalRow').count() === 8, 'un sous-total par région attendu');
+  const sub = await page.locator('tr.pvtSubtotalRow').first().locator('td.rowTotal').textContent();
+  const total = await page.locator('tr.pvtDataRow').first().locator('th.pvtRowLabel').first().textContent();
+  assert(total.includes('Auvergne'), 'premier groupe inattendu : ' + total);
+  assert(sub.replace(/\s/g, ' ') === '5 372 983', 'sous-total inattendu : ' + sub);
+  await page.locator('.grp-toggle').first().click();
+  await page.waitForTimeout(100);
+  assert(await page.locator('tr.pvtSubtotalRow.is-collapsed').count() === 1, 'groupe non replié');
+  assert(await page.locator('tr.pvtDataRow').count() === 35, 'lignes du groupe replié encore visibles');
+  await page.locator('tr.is-collapsed .grp-toggle').click();
+  await page.waitForTimeout(100);
+  assert(await page.locator('tr.pvtDataRow').count() === 40, 'groupe non déplié');
+  await page.close();
+});
+
+await test('tri par valeur décroissante : les groupes restent regroupés', async () => {
+  const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'], rowOrder: 'value_z_to_a' } });
+  const firsts = await page.locator('th.pvtRowLabel[data-level="0"]:not(.pvtSubtotalLabel)').allTextContents();
+  assert(firsts.length === 8, `chaque région doit apparaître une seule fois (${firsts.length})`);
+  assert(firsts[0].includes('Nouvelle-Aquitaine'), 'la région au plus fort total doit être en tête : ' + firsts[0]);
   await page.close();
 });
 
