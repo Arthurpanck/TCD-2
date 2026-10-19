@@ -63,6 +63,7 @@
               <select id="agg-select" class="input"></select>
             </label>
             <div id="val-inputs"></div>
+            <p class="hint" id="format-hint"></p>
           </section>
 
           <section class="cfg-section" id="filters-section">
@@ -81,7 +82,6 @@
                 <button type="button" data-value="table" role="radio">Tableau</button>
                 <button type="button" data-value="heat" role="radio">Chaleur</button>
                 <button type="button" data-value="bars" role="radio">Barres</button>
-                <button type="button" data-value="chart" role="radio">Graphique</button>
               </div>
             </div>
             <label class="field" id="heat-scope-field">
@@ -108,39 +108,11 @@
               <label class="switch"><input type="checkbox" id="col-totals"><span></span>Total par colonne</label>
               <label class="switch"><input type="checkbox" id="subtotals"><span></span>Sous-totaux par groupe</label>
             </div>
-          </details>
-
-          <details class="cfg-section" open>
-            <summary><h3>Format des nombres</h3></summary>
-            <div class="field-row three">
-              <label class="field">
-                <span class="field-label">Décimales</span>
-                <select id="decimals" class="input">
-                  <option value="auto">Auto</option>
-                  <option value="0">0</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field-label">Échelle</span>
-                <select id="scale" class="input">
-                  <option value="1">Unités</option>
-                  <option value="1000">Milliers (k)</option>
-                  <option value="1000000">Millions (M)</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field-label">Unité</span>
-                <input id="suffix" class="input" list="suffix-list" placeholder="ex. €" maxlength="8">
-                <datalist id="suffix-list"><option value="€"><option value="%"><option value="h"><option value="m²"><option value="ETP"></datalist>
-              </label>
+            <div class="field">
+              <span class="field-label">Clic sur une case</span>
+              <label class="switch"><input type="checkbox" id="click-detail"><span></span>Afficher le détail des lignes</label>
+              <p class="hint">Dans tous les cas, les lignes de la case sont transmises aux widgets Grist liés à ce tableau (« Sélectionner par »).</p>
             </div>
-            <p class="hint" id="format-preview"></p>
-          </details>
-
-          <details class="cfg-section" open>
-            <summary><h3>Apparence</h3></summary>
             <div class="field">
               <span class="field-label">Densité</span>
               <div class="segmented" id="density-seg" role="radiogroup">
@@ -149,11 +121,8 @@
                 <button type="button" data-value="comfortable" role="radio">Aérée</button>
               </div>
             </div>
-            <div class="field">
-              <span class="field-label">Couleur d'accent</span>
-              <div class="swatches" id="accent-swatches" role="radiogroup"></div>
-            </div>
           </details>
+
         </div>
       </aside>
 
@@ -183,9 +152,7 @@
         </div>
         <div id="drawer-filters" class="filter-list"></div>
         <div id="drawer-body" class="drawer-body"></div>
-        <div class="drawer-foot">
-          <button type="button" id="drawer-select" class="btn btn-primary">Sélectionner ces lignes dans Grist</button>
-        </div>
+        <p class="drawer-foot hint">Ces lignes sont aussi transmises aux widgets Grist liés à ce tableau (« Sélectionner par »). Échap pour fermer, Échap encore pour désélectionner.</p>
       </aside>
 
       <div id="popover" class="popover" hidden></div>
@@ -195,10 +162,10 @@
 
     <script src="icons.js"></script>
     <script src="ui.js"></script>
+    <script src="gristColumns.js"></script>
     <script src="data.js"></script>
     <script src="aggregators.js"></script>
     <script src="render.js"></script>
-    <script src="chartView.js"></script>
     <script src="config.js"></script>
     <script src="index.js"></script>
   </body>

@@ -141,9 +141,14 @@ const TCDData = (function () {
     return [...counts.entries()].sort((a, b) => sorter(a[0], b[0]));
   }
 
-  /** Libellé lisible d'un champ (les identifiants Grist utilisent des « _ ») */
+  /**
+   * Libellé lisible d'un champ : libellé de la colonne dans Grist s'il est connu,
+   * sinon l'identifiant sans « _ ». Les champs dérivés gardent leur suffixe (« › Année »).
+   */
   function label(attr) {
-    return String(attr).replace(/_/g, ' ');
+    const [colId, ...suffix] = String(attr).split(DERIVED_SEP);
+    const base = TCDGrist.label(colId) || colId.replace(/_/g, ' ');
+    return [base, ...suffix].join(DERIVED_SEP);
   }
 
   return { EMPTY, prepare, makeSorters, valueCounts, label };

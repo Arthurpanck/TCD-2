@@ -14,15 +14,21 @@ Cette version du widget est développée par [Arthur Panckoucke](https://github.
 
 Les réglages sont enregistrés automatiquement dans le widget.
 
+### Accès du widget
+
+- **Lecture de la table** (suffisant) : les nombres s'affichent au format par défaut de Grist et les champs sous leur identifiant.
+- **Accès complet** (recommandé) : le widget lit en plus les métadonnées du document pour reprendre le **format** (devise, %, décimales) et le **libellé** de chaque colonne, comme dans le tableur Grist. Il n'écrit jamais dans les données.
+
 ## Fonctionnalités
 
 **Consultation**
 - Tableau lisible par défaut, sans interface d'édition : en-têtes et totaux figés lors du défilement
 - Survol en croix (ligne et colonne) et info-bulle détaillant chaque cellule
-- Clic sur une cellule : détail des lignes sources, transmises aux widgets Grist liés (« Sélectionner par » ce widget)
+- Clic sur une cellule : ses lignes sont transmises aux widgets Grist liés (« Sélectionner par » ce widget) et, si l'option est active, affichées dans un panneau de détail limité aux colonnes du tableau
 - Filtres rapides depuis la barre de résumé
 - Sous-totaux par groupe, repliables (individuellement ou tous à la fois)
-- Mise en forme : tableau, carte de chaleur (globale, par ligne, par colonne), barres de données ou graphique (colonnes, empilées, barres, courbes)
+- Mise en forme : tableau, carte de chaleur (globale, par ligne, par colonne) ou barres de données
+- Nombres au format de la colonne dans Grist (devise, pourcentage, décimales, séparateurs)
 - Densité (compacte, standard, aérée) et taille du texte
 - Export : copie pour Excel / LibreOffice, CSV (séparateur « ; », compatible Excel français), impression
 
@@ -32,8 +38,7 @@ Les réglages sont enregistrés automatiquement dans le widget.
 - Calculs : nombre, somme, moyenne, moyenne pondérée, médiane, min/max, écart-type, répartitions en %…
 - Filtres de valeurs avec recherche, « tout cocher », « seulement », et nombre d'occurrences
 - Tri des lignes et colonnes (libellé ou valeur), totaux activables
-- Format des nombres : décimales, échelle (milliers, millions), unité (€, %, h…)
-- Couleur d'accent, thème clair/sombre synchronisé avec Grist
+- Thème clair/sombre synchronisé avec Grist
 - « Annuler » pour revenir à l'état d'ouverture de la configuration
 
 Les configurations enregistrées par les versions précédentes (y compris en anglais) sont reprises automatiquement.
@@ -55,7 +60,7 @@ Organisation du code :
 | `index.js` | État, liaison avec Grist, rendu, détail, export |
 | `config.js` | Panneau de configuration |
 | `render.js` | Calcul pivottable, construction du tableau, sous-totaux, mise en forme |
-| `chartView.js` | Vue graphique (Chart.js chargé à la demande) |
+| `gristColumns.js` | Formats et libellés des colonnes Grist (logique de formatage de Grist) |
 | `data.js` | Préparation des données Grist (types, dates, valeurs vides, tri) |
-| `aggregators.js` | Catalogue des calculs et format des nombres |
+| `aggregators.js` | Catalogue des calculs |
 | `ui.js`, `icons.js` | Popovers, menus, notifications, icônes |

@@ -57,7 +57,29 @@
       async getOption(k) { return store[k]; },
       async setOption(k, v) { return window.grist.setOption(k, v); },
     },
-    docApi: {},
+    // Métadonnées Grist : disponibles seulement si le test fournit __MOCK_META__ (accès complet),
+    // sinon refus comme avec l'accès « lecture de la table »
+    docApi: {
+      async fetchTable(tableId) {
+        const meta = window.__MOCK_META__;
+        if (!meta) { throw new Error('Access denied'); }
+        if (tableId === '_grist_Tables') { return { id: [1], tableId: ['Table1'] }; }
+        if (tableId === '_grist_DocInfo') { return { id: [1], documentSettings: [JSON.stringify(meta.documentSettings || {})] }; }
+        if (tableId === '_grist_Tables_column') {
+          const cols = Object.entries(meta.columns || {});
+          return {
+            id: cols.map((_c, i) => i + 1),
+            parentId: cols.map(() => 1),
+            colId: cols.map(([c]) => c),
+            label: cols.map(([c, o]) => o.label || c),
+            type: cols.map(([, o]) => o.type || 'Any'),
+            widgetOptions: cols.map(([, o]) => JSON.stringify(o.options || {})),
+          };
+        }
+        throw new Error('Unknown table');
+      },
+    },
+    async getSelectedTableId() { return 'Table1'; },
     setSelectedRows(ids) { window.__mockGrist.selected = ids; },
     // Simule le clic sur « Ouvrir la configuration » dans le panneau Grist
     __openConfig() { const o = window.__mockGrist.readyOpts; o && o.onEditOptions && o.onEditOptions(); },

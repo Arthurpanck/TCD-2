@@ -20,14 +20,12 @@ const DEFAULTS = {
   rowTotals: true,
   colTotals: true,
   subtotals: true,
-  chartType: 'bar',
-  decimals: 'auto',
-  scale: 1,
-  suffix: '',
+  clickDetail: true,
   density: 'standard',
   fontScale: 1,
-  accent: 'bleu',
 };
+// Réglages des versions précédentes qui n'existent plus (graphique, format des nombres, couleur d'accent)
+const OBSOLETE = ['chartType', 'decimals', 'scale', 'suffix', 'accent'];
 const ORDERS = ['key_a_to_z', 'value_a_to_z', 'value_z_to_a'];
 const DENSITIES = ['compact', 'standard', 'comfortable'];
 
@@ -67,11 +65,8 @@ function normalizeSettings(raw, legacy = {}) {
   s.rowTotals = s.rowTotals !== false;
   s.colTotals = s.colTotals !== false;
   s.subtotals = s.subtotals !== false;
-  if (!TCDChart.TYPES.some(([t]) => t === s.chartType)) { s.chartType = DEFAULTS.chartType; }
-  s.scale = [1, 1e3, 1e6].includes(Number(s.scale)) ? Number(s.scale) : 1;
-  s.suffix = typeof s.suffix === 'string' ? s.suffix : '';
-  if (!['auto', '0', '1', '2', 0, 1, 2].includes(s.decimals)) { s.decimals = 'auto'; }
-  s.decimals = String(s.decimals);
+  s.clickDetail = s.clickDetail !== false;
+  OBSOLETE.forEach(k => { delete s[k]; });
   // Ancien réglage « Taille colonnes » (0.25x → 1.0x) converti en densité
   if ((!raw || raw.density === undefined) && legacy.columnSize) {
     s.density = parseFloat(legacy.columnSize) < 0.75 ? 'compact' : 'standard';
@@ -87,7 +82,6 @@ function rendererOf(name) {
     case 'Carte de chaleur par ligne': case 'Row Heatmap': return { kind: 'heat', scope: 'row' };
     case 'Carte de chaleur par colonne': case 'Col Heatmap': return { kind: 'heat', scope: 'col' };
     case 'Table avec barres': case 'Table Barchart': return { kind: 'bars', scope: 'all' };
-    case 'Graphique': return { kind: 'chart', scope: 'all' };
     default: return { kind: 'table', scope: 'all' };
   }
 }
@@ -106,6 +100,7 @@ function update(patch) {
   if (patch.rows && patch.rows.join('\0') !== state.settings.rows.join('\0')) {
     state.view.collapsed.clear();
   }
+  if (['rows', 'cols', 'exclusions', 'aggregatorName', 'vals'].some(k => k in patch)) { clearSelection(); }
   state.settings = normalizeSettings({ ...state.settings, ...patch });
   applyAppearance();
   TCDConfig.refresh();
@@ -148,7 +143,6 @@ function applyAppearance() {
   const s = state.settings;
   const root = document.documentElement;
   root.dataset.density = s.density;
-  root.style.setProperty('--accent-base', TCDConfig.accentColor(s.accent));
   root.style.setProperty('--font-scale', s.fontScale);
 }
 
@@ -187,9 +181,6 @@ function render() {
       'Pour le construire, cliquez sur « Ouvrir la configuration » dans le panneau de droite de Grist (onglet du widget).');
   }
 
-  if (s.renderer === 'chart') { return renderChart(s); }
-  TCDChart.destroy();
-
   let table;
   try {
     const result = TCDRender.render(state.dataset, s, state.aggLabel, state.view);
@@ -211,31 +202,7 @@ function render() {
   indexColumns(table);
 }
 
-function renderChart(s) {
-  const out = $id('output');
-  try {
-    state.pd = TCDRender.buildPivotData(state.dataset, s);
-  } catch (e) {
-    console.error(e);
-    renderSummary(s);
-    return showMessage('info', 'Impossible de calculer ce tableau', String(e && e.message || e));
-  }
-  state.cellInfo = new WeakMap();
-  renderSummary(s);
-  out.classList.remove('is-message');
-  const box = el('div', { class: 'chart-view' });
-  out.replaceChildren(box);
-  TCDChart.render(box, {
-    pd: state.pd,
-    settings: s,
-    aggLabel: state.aggLabel,
-    onSelect: cell => openDrawer(cell),
-    onType: type => update({ chartType: type }),
-  });
-}
-
 function showMessage(icon, title, text, action) {
-  TCDChart.destroy();
   const out = $id('output');
   out.classList.add('is-message');
   out.replaceChildren(el('div', { class: 'empty' },
@@ -372,7 +339,7 @@ function setupTableInteractions() {
     }
     const td = e.target.closest('td.pvtVal, td.pvtSubtotal, td.pvtTotal, td.pvtGrandTotal');
     const keys = td && cellKeys(td);
-    if (keys) { hideTooltip(); openDrawer(keys, td); }
+    if (keys) { hideTooltip(); selectCell(keys, td); }
   });
 
   // Recalcule les en-têtes figés quand la taille change (panneau Grist ouvert, redimensionnement…)
@@ -418,7 +385,7 @@ function onTableKey(e) {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
     const keys = cellKeys(current);
-    if (keys) { openDrawer(keys, current); }
+    if (keys) { selectCell(keys, current); }
     return;
   }
   e.preventDefault();
@@ -449,16 +416,34 @@ function focusCell(td) {
 
 let selectedTd = null;
 
-/** Détail d'une cellule : keys = { rowKey, colKey, agg } ; td = cellule du tableau à mettre en évidence */
-function openDrawer(keys, td) {
-  const criteria = criteriaFor(keys);
-  const records = [];
-  state.pd.forEachMatchingRecord(criteria, rec => { records.push(rec); });
-  const agg = keys.agg;
+/** Colonnes utiles au détail : celles regroupées (lignes, colonnes) et celles calculées (valeurs) */
+function detailFields() {
+  const s = effectiveSettings();
+  const byName = new Map(state.dataset.fields.map(f => [f.name, f]));
+  const names = [...s.rows, ...s.cols, ...s.vals]
+    .map(n => (byName.get(n) && byName.get(n).parent) || n)
+    .filter((n, i, all) => byName.has(n) && all.indexOf(n) === i);
+  return names.map(n => byName.get(n));
+}
 
+/**
+ * Clic sur une cellule : met la cellule en évidence et transmet ses lignes aux widgets Grist liés
+ * (« Sélectionner par » ce widget). Le panneau de détail s'ouvre si le réglage est actif.
+ */
+function selectCell(keys, td) {
+  const records = [];
+  state.pd.forEachMatchingRecord(criteriaFor(keys), rec => { records.push(rec); });
   if (selectedTd) { selectedTd.classList.remove('is-selected'); }
   selectedTd = td || null;
   if (td) { td.classList.add('is-selected'); }
+  selectRows(records.map(r => r.id).filter(id => typeof id === 'number'));
+  if (state.settings.clickDetail) { openDrawer(keys, records); }
+}
+
+/** Panneau de détail d'une cellule : keys = { rowKey, colKey, agg } */
+function openDrawer(keys, records) {
+  const criteria = criteriaFor(keys);
+  const agg = keys.agg;
 
   $id('drawer-value').textContent = agg.format(agg.value()) || '—';
   $id('drawer-sub').textContent = `${state.aggLabel} · ${records.length.toLocaleString('fr-FR')} ligne${records.length > 1 ? 's' : ''}`;
@@ -468,25 +453,18 @@ function openDrawer(keys, td) {
     : [el('span', { class: 'crit' }, el('b', {}, 'Toutes les lignes'))]));
 
   const LIMIT = 300;
-  const fields = state.dataset.fields.filter(f => !f.parent);
+  const fields = detailFields();
   const body = $id('drawer-body');
   body.replaceChildren(el('table', { class: 'detail-table' },
     el('thead', {}, el('tr', {}, fields.map(f => el('th', { class: f.type === 'number' ? 'num' : '' }, label(f.name))))),
     el('tbody', {}, records.slice(0, LIMIT).map(rec => el('tr', {}, fields.map(f => {
       const v = rec[f.name];
       return el('td', { class: (f.type === 'number' ? 'num' : '') + (v === TCDData.EMPTY ? ' is-empty' : '') },
-        typeof v === 'number' ? v.toLocaleString('fr-FR', { useGrouping: Math.abs(v) >= 1e4 }) : String(v));
+        typeof v === 'number' ? TCDGrist.formatter(f.name)(v) : String(v));
     }))))));
   if (records.length > LIMIT) {
     body.append(el('p', { class: 'hint' }, `Seules les ${LIMIT} premières lignes sont affichées.`));
   }
-
-  const ids = records.map(r => r.id).filter(id => typeof id === 'number');
-  $id('drawer-select').onclick = () => {
-    selectRows(ids);
-    UI.toast(`${ids.length.toLocaleString('fr-FR')} ligne(s) transmise(s) aux widgets liés.`, 'success');
-  };
-  selectRows(ids);
 
   $id('drawer').hidden = false;
   $id('drawer-backdrop').hidden = false;
@@ -494,11 +472,19 @@ function openDrawer(keys, td) {
   $id('drawer-close').focus({ preventScroll: true });
 }
 
+/** Ferme le panneau ; la cellule reste sélectionnée pour les widgets liés */
 function closeDrawer() {
-  if ($id('drawer').hidden) { return; }
+  if ($id('drawer').hidden) { return false; }
   document.body.classList.remove('drawer-open');
-  if (selectedTd) { selectedTd.classList.remove('is-selected'); selectedTd = null; }
   setTimeout(() => { $id('drawer').hidden = true; $id('drawer-backdrop').hidden = true; }, 180);
+  return true;
+}
+
+/** Désélectionne la cellule : les widgets liés affichent de nouveau toutes les lignes */
+function clearSelection() {
+  if (!selectedTd) { return; }
+  selectedTd.classList.remove('is-selected');
+  selectedTd = null;
   selectRows(null);
 }
 
@@ -525,7 +511,7 @@ function openDisplayMenu(anchor) {
     el('button', { type: 'button', class: v === current ? 'is-active' : '', onclick: () => { onPick(v); reopen(); } }, l)));
   const root = el('div', { class: 'menu display-menu' },
     el('div', { class: 'menu-title' }, 'Mise en forme'),
-    seg([['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres'], ['chart', 'Graphique']], r.kind,
+    seg([['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']], r.kind,
       v => update({ rendererName: TCDConfig.rendererName(v, r.scope) })),
     s.subtotals && s.rows.length > 1 ? el('div', { class: 'menu-title' }, 'Groupes') : null,
     s.subtotals && s.rows.length > 1 ? el('div', { class: 'segmented' },
@@ -615,6 +601,10 @@ function openExportMenu(anchor) {
 // ---------------------------------------------------------------------------
 
 function openConfig() {
+  // Recharge les formats : ils ont pu changer dans Grist depuis l'ouverture
+  Promise.resolve(grist.getSelectedTableId ? grist.getSelectedTableId() : null)
+    .then(tableId => TCDGrist.load(tableId))
+    .then(() => { TCDConfig.refresh(); scheduleRender(); });
   if (!state.configOpen) {
     state.configOpen = true;
     state.snapshot = JSON.parse(JSON.stringify(state.settings));
@@ -680,7 +670,9 @@ function start() {
   $id('btn-export').addEventListener('click', e => openExportMenu(e.currentTarget));
   $id('drawer-close').addEventListener('click', closeDrawer);
   $id('drawer-backdrop').addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $id('popover').hidden) { closeDrawer(); } });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $id('popover').hidden && !closeDrawer()) { clearSelection(); }
+  });
 
   showMessage('table', 'Chargement des données…', '');
   $id('output').classList.add('is-loading');
@@ -702,7 +694,14 @@ function start() {
   // Si Grist n'envoie pas d'options (widget neuf), on affiche quand même
   setTimeout(() => { if (!state.optionsLoaded) { state.optionsLoaded = true; scheduleRender(); } }, 1500);
 
-  grist.onRecords(records => {
+  let columnsLoaded = null;
+  grist.onRecords(async records => {
+    // Formats et libellés des colonnes Grist (une fois, avant le premier affichage)
+    if (!columnsLoaded) {
+      columnsLoaded = Promise.resolve(grist.getSelectedTableId ? grist.getSelectedTableId() : null)
+        .then(tableId => TCDGrist.load(tableId));
+    }
+    await columnsLoaded;
     state.dataset = TCDData.prepare(records);
     $id('output').classList.remove('is-loading');
     if (state.configOpen) { TCDConfig.refresh(); }

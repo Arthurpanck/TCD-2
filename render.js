@@ -10,7 +10,6 @@ const TCDRender = (function () {
   const DEFAULT_ROW_LIMIT = 1500;
 
   function buildPivotData(dataset, s, rows = s.rows) {
-    const fmt = TCDAggregators.numberFormatter(s);
     const exclusions = {};
     for (const [attr, values] of Object.entries(s.exclusions || {})) {
       if (values && values.length) { exclusions[attr] = new Set(values.map(String)); }
@@ -27,7 +26,7 @@ const TCDRender = (function () {
       rows,
       cols: s.cols,
       vals: s.vals,
-      aggregator: TCDAggregators.build(s.aggregatorName, s.vals, fmt),
+      aggregator: TCDAggregators.build(s.aggregatorName, s.vals),
       aggregatorName: s.aggregatorName,
       sorters: TCDData.makeSorters(dataset.sortKeys),
       rowOrder: s.rowOrder,

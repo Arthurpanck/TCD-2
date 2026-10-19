@@ -1,5 +1,5 @@
 /**
- * Catalogue des calculs (agrégateurs) proposés, libellés lisibles et format des nombres.
+ * Catalogue des calculs (agrégateurs) proposés et libellés lisibles.
  * Les clés restent celles de la locale française de pivottable pour rester compatible
  * avec les configurations déjà enregistrées dans Grist.
  */
@@ -102,31 +102,19 @@ const TCDAggregators = (function () {
     return INPUT_LABELS[name] || Array.from({ length: n }, (_, i) => (n > 1 ? `Champ ${i + 1}` : 'Champ'));
   }
 
-  /**
-   * Formateur de nombres français : décimales auto/fixes, échelle (k, M) et unité.
-   */
-  function numberFormatter({ decimals = 'auto', scale = 1, suffix = '' } = {}) {
-    scale = Number(scale) || 1;
-    const digits = decimals === 'auto' ? null : Number(decimals);
-    const nf = new Intl.NumberFormat('fr-FR', digits === null
-      ? { maximumFractionDigits: scale > 1 ? 1 : 2 }
-      : { minimumFractionDigits: digits, maximumFractionDigits: digits });
-    const unit = (scale === 1e3 ? 'k' : scale === 1e6 ? 'M' : '') + (suffix || '');
-    return x => {
-      if (typeof x !== 'number' || !isFinite(x)) { return x === null || x === undefined ? '' : String(x); }
-      const s = nf.format(x / scale);
-      return unit ? `${s} ${unit}` : s;
-    };
-  }
+  // Calculs dont le résultat garde l'unité de la colonne : on lui applique le format de la colonne dans Grist
+  const KEEPS_COLUMN_FORMAT = new Set(['Somme', 'Somme en entiers', 'Moyenne', 'Moyenne pondérée', 'Médiane',
+    'Minimum', 'Maximum', 'Premier', 'Dernier', 'Écart-type']);
 
   /**
-   * Construit l'agrégateur pivottable, avec le format de nombres choisi par l'utilisateur.
+   * Construit l'agrégateur pivottable. Les nombres sont affichés au format de la colonne Grist
+   * (devise, pourcentage, décimales…) ou, à défaut, au format par défaut de Grist.
    */
-  function build(name, vals, fmt) {
+  function build(name, vals) {
     const base = catalogue[name](vals);
     const k = kind(name);
     if (k === 'percent' || k === 'list') { return base; }
-    const formatter = k === 'count' ? numberFormatter() : fmt;
+    const formatter = TCDGrist.formatter(KEEPS_COLUMN_FORMAT.has(name) ? vals[0] : null);
     return (data, rowKey, colKey) => {
       const agg = base(data, rowKey, colKey);
       agg.format = formatter;
@@ -150,5 +138,5 @@ const TCDAggregators = (function () {
     return `${label} de ${L(v[0])}`;
   }
 
-  return { catalogue, GROUPS, LABELS, normalizeName, numInputs, inputLabels, kind, numberFormatter, build, describe };
+  return { catalogue, GROUPS, LABELS, normalizeName, numInputs, inputLabels, kind, build, describe };
 })();

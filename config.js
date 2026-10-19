@@ -16,16 +16,6 @@ const TCDConfig = (function () {
     ['value_a_to_z', 'Par valeur croissante'],
   ];
 
-  const ACCENTS = [
-    ['bleu', 'Bleu', '#3157d5'],
-    ['marine', 'Bleu France', '#000091'],
-    ['vert', 'Vert', '#16855c'],
-    ['petrole', 'Bleu canard', '#0e7490'],
-    ['violet', 'Violet', '#6d4bd8'],
-    ['orange', 'Orange', '#c2570c'],
-    ['ardoise', 'Ardoise', '#475569'],
-  ];
-
   function init(api) {
     app = api;
 
@@ -48,22 +38,11 @@ const TCDConfig = (function () {
     $id('row-totals').addEventListener('change', e => app.update({ rowTotals: e.target.checked }));
     $id('col-totals').addEventListener('change', e => app.update({ colTotals: e.target.checked }));
     $id('subtotals').addEventListener('change', e => app.update({ subtotals: e.target.checked }));
+    $id('click-detail').addEventListener('change', e => app.update({ clickDetail: e.target.checked }));
     $id('heat-scope').addEventListener('change', e => app.update({ rendererName: rendererName('heat', e.target.value) }));
-    $id('decimals').addEventListener('change', e => app.update({ decimals: e.target.value }));
-    $id('scale').addEventListener('change', e => app.update({ scale: Number(e.target.value) }));
-    $id('suffix').addEventListener('input', e => app.update({ suffix: e.target.value.trim() }));
 
     segmented($id('renderer-seg'), v => app.update({ rendererName: rendererName(v, $id('heat-scope').value) }));
     segmented($id('density-seg'), v => app.update({ density: v }));
-
-    const sw = $id('accent-swatches');
-    for (const [id, name, color] of ACCENTS) {
-      sw.append(el('button', {
-        type: 'button', role: 'radio', class: 'swatch', title: name, 'aria-label': name,
-        dataset: { value: id }, style: `--swatch:${color}`,
-        onclick: () => app.update({ accent: id }),
-      }));
-    }
 
     $id('swap-axes').innerHTML = Icons.svg('swap', 15);
     $id('swap-axes').addEventListener('click', () => {
@@ -119,7 +98,6 @@ const TCDConfig = (function () {
     if (kind === 'heat') {
       return { row: 'Carte de chaleur par ligne', col: 'Carte de chaleur par colonne' }[scope] || 'Carte de chaleur';
     }
-    if (kind === 'chart') { return 'Graphique'; }
     return kind === 'bars' ? 'Table avec barres' : 'Table';
   }
 
@@ -362,21 +340,12 @@ const TCDConfig = (function () {
     $id('row-totals').checked = s.rowTotals;
     $id('col-totals').checked = s.colTotals;
     $id('subtotals').checked = s.subtotals;
-    $id('decimals').value = String(s.decimals);
-    $id('scale').value = String(s.scale);
-    if (document.activeElement !== $id('suffix')) { $id('suffix').value = s.suffix; }
-    $id('format-preview').textContent = 'Aperçu : ' + TCDAggregators.numberFormatter(s)(1234567.891);
+    $id('click-detail').checked = s.clickDetail;
     setSegmented($id('density-seg'), s.density);
-    $id('accent-swatches').querySelectorAll('.swatch').forEach(b => {
-      const on = b.dataset.value === s.accent;
-      b.classList.toggle('is-active', on);
-      b.setAttribute('aria-checked', on);
-    });
+    $id('format-hint').textContent = TCDGrist.isAvailable()
+      ? 'Les nombres reprennent le format de la colonne dans Grist.'
+      : "Les nombres s'affichent au format par défaut de Grist. Pour reprendre le format de la colonne (devise, %, décimales), donnez au widget l'accès complet au document.";
   }
 
-  function accentColor(id) {
-    return (ACCENTS.find(a => a[0] === id) || ACCENTS[0])[2];
-  }
-
-  return { init, refresh, openFilter, filterPill, rendererName, accentColor, ACCENTS };
+  return { init, refresh, openFilter, filterPill, rendererName };
 })();

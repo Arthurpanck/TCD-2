@@ -11,12 +11,16 @@ const URL = process.env.WIDGET_URL || 'http://localhost:8765/index.html';
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 let failures = 0, passed = 0;
 
-async function open(options, { width = 1280, height = 760, data } = {}) {
+async function open(options, { width = 1280, height = 760, data, meta } = {}) {
   const page = await browser.newPage({ viewport: { width, height } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') { errors.push(m.text()); } });
-  await page.addInitScript(([o, d]) => { window.__MOCK_OPTIONS__ = o; if (d) { window.__MOCK_DATA__ = d; } }, [options, data]);
+  await page.addInitScript(([o, d, m]) => {
+    window.__MOCK_OPTIONS__ = o;
+    if (d) { window.__MOCK_DATA__ = d; }
+    if (m) { window.__MOCK_META__ = m; }
+  }, [options, data, meta]);
   await page.route('**/grist-plugin-api.js', r => r.fulfill({ body: mock, contentType: 'application/javascript' }));
   await page.goto(URL);
   await page.waitForTimeout(400);
@@ -48,7 +52,7 @@ await test('affiche le tableau en consultation, sans erreur', async () => {
   const page = await open({ settings: base });
   assert(await page.locator('table.pvtTable').count() === 1, 'tableau absent');
   assert(await page.locator('#config').isHidden(), 'la configuration ne doit pas être ouverte par défaut');
-  assert((await page.locator('td.pvtGrandTotal').textContent()).replace(/\s/g, ' ') === '48 283 695', 'total général inattendu : ' + await page.locator('td.pvtGrandTotal').textContent());
+  assert((await page.locator('td.pvtGrandTotal').textContent()) === '48283695', 'total général inattendu (format par défaut de Grist) : ' + await page.locator('td.pvtGrandTotal').textContent());
   assert(page.errors.length === 0, page.errors.join(' | '));
   await page.close();
 });
@@ -145,7 +149,7 @@ await test('détail d’une cellule et sélection transmise aux widgets liés', 
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   assert(await page.locator('#drawer').isHidden(), 'Échap doit fermer le détail');
-  assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'la sélection doit être réinitialisée');
+  assert((await page.evaluate(() => window.__mockGrist.selected) || []).length === n, 'la sélection doit rester active pour les vues liées');
   await page.close();
 });
 
@@ -155,7 +159,7 @@ await test('sous-totaux par groupe, repli et dépli', async () => {
   const sub = await page.locator('tr.pvtSubtotalRow').first().locator('td.rowTotal').textContent();
   const total = await page.locator('tr.pvtDataRow').first().locator('th.pvtRowLabel').first().textContent();
   assert(total.includes('Auvergne'), 'premier groupe inattendu : ' + total);
-  assert(sub.replace(/\s/g, ' ') === '5 372 983', 'sous-total inattendu : ' + sub);
+  assert(sub === '5372983', 'sous-total inattendu : ' + sub);
   await page.locator('.grp-toggle').first().click();
   await page.waitForTimeout(100);
   assert(await page.locator('tr.pvtSubtotalRow.is-collapsed').count() === 1, 'groupe non replié');
@@ -171,31 +175,6 @@ await test('tri par valeur décroissante : les groupes restent regroupés', asyn
   const firsts = await page.locator('th.pvtRowLabel[data-level="0"]:not(.pvtSubtotalLabel)').allTextContents();
   assert(firsts.length === 8, `chaque région doit apparaître une seule fois (${firsts.length})`);
   assert(firsts[0].includes('Nouvelle-Aquitaine'), 'la région au plus fort total doit être en tête : ' + firsts[0]);
-  await page.close();
-});
-
-await test('vue graphique : rendu, changement de type et détail au clic', async () => {
-  const page = await open({ settings: { ...base, cols: ['Statut'], rendererName: 'Graphique' } });
-  await page.waitForFunction(() => window.Chart && document.querySelector('.chart-view canvas'), null, { timeout: 15000 });
-  await page.waitForTimeout(400);
-  const n = await page.evaluate(() => Chart.getChart(document.querySelector('.chart-view canvas')).data.datasets.length);
-  assert(n === 4, 'quatre séries attendues : ' + n);
-  const pt = await page.evaluate(() => {
-    const canvas = document.querySelector('.chart-view canvas');
-    const bar = Chart.getChart(canvas).getDatasetMeta(0).data[0];
-    const r = canvas.getBoundingClientRect();
-    return { x: r.left + bar.x, y: r.top + (bar.y + bar.base) / 2 };
-  });
-  await page.mouse.click(pt.x, pt.y);
-  await page.waitForTimeout(300);
-  assert(await page.locator('#drawer').isVisible(), 'le clic sur une barre doit ouvrir le détail');
-  assert((await page.locator('#drawer-filters').textContent()).includes('Engagé'), 'critères du détail inattendus');
-  await page.keyboard.press('Escape');
-  await page.click('.chart-toolbar button:has-text("Courbes")');
-  await page.waitForTimeout(700);
-  const s = await savedSettings(page);
-  assert(s && s.chartType === 'line', 'type de graphique non enregistré');
-  assert(page.errors.length === 0, page.errors.join(' | '));
   await page.close();
 });
 
@@ -247,6 +226,72 @@ await test('données hétérogènes : vides, booléens, listes et erreurs Grist'
   await page.waitForTimeout(150);
   assert((await page.locator('th.pvtColLabel').allTextContents()).includes('#Erreur'), 'erreur de formule non signalée');
   assert(page.errors.length === 0, page.errors.join(' | '));
+  await page.close();
+});
+
+await test('accès complet : format et libellés des colonnes repris de Grist', async () => {
+  const meta = {
+    documentSettings: { locale: 'fr-FR', currency: 'EUR' },
+    columns: {
+      Montant: { label: 'Montant engagé', type: 'Numeric', options: { numMode: 'currency', decimals: 0, maxDecimals: 0 } },
+      Region: { label: 'Région', type: 'Text' },
+    },
+  };
+  const page = await open({ settings: base }, { meta });
+  const total = (await page.locator('td.pvtGrandTotal').textContent()).replace(/\s/g, ' ');
+  assert(total === '48 283 695 €', 'format devise de la colonne non repris : ' + total);
+  assert((await page.locator('#summary').textContent()).includes('Somme de Montant engagé'), 'libellé Grist non repris');
+  assert(await page.locator('th.pvtAxisLabel', { hasText: 'Région' }).count() === 1, 'libellé de colonne non repris dans le tableau');
+  await page.evaluate(() => grist.__openConfig());
+  assert((await page.locator('#format-hint').textContent()).includes('format de la colonne'), 'indication de format absente');
+  await page.close();
+});
+
+await test('format par défaut : pas de bruit de virgule flottante dans les totaux', async () => {
+  const data = [0.1, 0.2, 0.3].map((v, i) => ({ id: i + 1, Groupe: 'A', Valeur: v }));
+  const page = await open({ settings: { rows: ['Groupe'], cols: [], vals: ['Valeur'], aggregatorName: 'Somme' } }, { data });
+  const total = await page.locator('tr.pvtTotalsRow td').last().textContent();
+  assert(total === '0,6' || total === '0.6', 'total attendu 0,6 : ' + total);
+  await page.close();
+});
+
+await test('lecture seule : format par défaut de Grist et indication pour l’accès complet', async () => {
+  const page = await open({ settings: base });
+  await page.evaluate(() => grist.__openConfig());
+  assert((await page.locator('#format-hint').textContent()).includes('accès complet'), 'indication accès complet absente');
+  assert(await page.locator('#decimals, #scale, #suffix, #accent-swatches').count() === 0, 'les anciens réglages de format/couleur doivent avoir disparu');
+  assert(await page.locator('#renderer-seg button[data-value="chart"]').count() === 0, 'le mode graphique doit avoir disparu');
+  await page.close();
+});
+
+await test('anciens réglages graphique / format / couleur ignorés et nettoyés', async () => {
+  const page = await open({ settings: { ...base, rendererName: 'Graphique', chartType: 'line', scale: 1000, suffix: '€', accent: 'vert' } });
+  assert(await page.locator('table.pvtTable').count() === 1, 'un ancien réglage « Graphique » doit afficher le tableau');
+  await page.evaluate(() => update({ density: 'compact' }));
+  await page.waitForTimeout(500);
+  const s = await savedSettings(page);
+  assert(s && !('chartType' in s) && !('scale' in s) && !('suffix' in s) && !('accent' in s), 'réglages obsolètes encore enregistrés : ' + JSON.stringify(s));
+  await page.close();
+});
+
+await test('clic : détail limité aux colonnes du tableau, sélection gardée pour les vues liées', async () => {
+  const page = await open({ settings: { ...base, cols: ['Statut'] } });
+  await page.click('td.pvtVal[data-row="0"][data-col="0"]');
+  await page.waitForTimeout(250);
+  const heads = await page.locator('.detail-table th').allTextContents();
+  assert(heads.join('|') === 'Region|Statut|Montant', 'colonnes du détail : ' + heads.join('|'));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  const kept = await page.evaluate(() => window.__mockGrist.selected);
+  assert(Array.isArray(kept) && kept.length > 0, 'la sélection doit rester après fermeture du détail');
+  await page.keyboard.press('Escape');
+  assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'second Échap : la sélection doit être effacée');
+  await page.evaluate(() => update({ clickDetail: false }));
+  await page.waitForTimeout(100);
+  await page.click('td.pvtVal[data-row="1"][data-col="1"]');
+  await page.waitForTimeout(250);
+  assert(await page.locator('#drawer').isHidden(), 'détail désactivé : le panneau ne doit pas s’ouvrir');
+  assert((await page.evaluate(() => window.__mockGrist.selected) || []).length > 0, 'détail désactivé : la sélection doit quand même être transmise');
   await page.close();
 });
 
