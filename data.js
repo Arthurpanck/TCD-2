@@ -1,26 +1,20 @@
 /**
- * Préparation des données Grist pour le moteur pivottable :
- * - détection du type de chaque champ (nombre, date, texte)
- * - normalisation des valeurs (dates lisibles, listes, valeurs vides, booléens)
- * - champs dérivés pour les dates (année, trimestre, mois)
- * - clés de tri pour que les dates et les mois se trient chronologiquement
+ * Préparation des données Grist pour pivotUI.
+ * - Les champs portent le libellé de la colonne Grist (affiché tel quel par pivottable).
+ * - Les valeurs Grist sont normalisées (listes, erreurs, booléens, valeurs vides).
+ * - Les regroupements de dates (année, trimestre, mois) sont des `derivedAttributes`
+ *   construits avec les dérivateurs de pivottable, triés avec `sortAs`.
+ * Les réglages enregistrés gardent les identifiants de colonnes (toAttr / fromAttr).
  */
 const TCDData = (function () {
   const EMPTY = '(vide)';
   const HIDDEN_FIELDS = new Set(['id', 'manualSort']);
   const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
   const DERIVED_SEP = ' › ';
+  const DERIVED = ['Année', 'Trimestre', 'Mois'];
+  const { derivers, sortAs } = $.pivotUtilities;
 
-  const pad = n => String(n).padStart(2, '0');
   const asDate = v => (v instanceof Date && !isNaN(v.getTime()) ? v : null);
-
-  function formatDate(d) {
-    const date = `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
-    if (d.getUTCHours() || d.getUTCMinutes()) {
-      return `${date} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    }
-    return date;
-  }
 
   function cellValue(v) {
     if (v === null || v === undefined || v === '') { return EMPTY; }
@@ -50,106 +44,102 @@ const TCDData = (function () {
   }
 
   /**
+   * Dérivateur appliqué uniquement aux dates d'origine : pivottable rappelle les dérivateurs sur
+   * des enregistrements déjà dérivés, la valeur calculée au premier passage est alors conservée.
+   */
+  const fromDate = (attr, fn) => rec => {
+    const v = rec[attr];
+    if (v instanceof Date) { return fn(rec); }
+    return v === null || v === undefined ? EMPTY : undefined;
+  };
+
+  /** Tri chronologique des dates « jj/mm/aaaa [hh:mm] » */
+  function dayKey(s) {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})(?: (\d{2}):(\d{2}))?/.exec(s);
+    return m ? +`${m[3]}${m[2]}${m[1]}${m[4] || '00'}${m[5] || '00'}` : Infinity;
+  }
+  const daySorter = (a, b) => dayKey(a) - dayKey(b) || (a < b ? -1 : a > b ? 1 : 0);
+
+  /**
    * @param {Array<Object>} rawRecords - enregistrements reçus de grist.onRecords
-   * @returns {{records: Array<Object>, fields: Array<Object>, sortKeys: Object<string, Map>}}
+   * @returns {{records, fields, derivedAttributes, sorters, toAttr, fromAttr}}
    */
   function prepare(rawRecords) {
     rawRecords = rawRecords || [];
-    const names = Object.keys(rawRecords[0] || {}).filter(n => !HIDDEN_FIELDS.has(n));
-    const fields = [];
-    const sortKeys = {};
-    const setKey = (attr, label, key) => {
-      const m = sortKeys[attr] || (sortKeys[attr] = new Map());
-      if (!m.has(label)) { m.set(label, key); }
-    };
+    const colIds = Object.keys(rawRecords[0] || {}).filter(n => !HIDDEN_FIELDS.has(n));
 
-    for (const name of names) {
-      const type = detectType(rawRecords, name);
-      fields.push({ name, type });
-      if (type === 'date') {
-        fields.push({ name: name + DERIVED_SEP + 'Année', type: 'date', parent: name });
-        fields.push({ name: name + DERIVED_SEP + 'Trimestre', type: 'date', parent: name });
-        fields.push({ name: name + DERIVED_SEP + 'Mois', type: 'date', parent: name });
-      }
+    // Nom affiché de chaque colonne : libellé Grist, sinon identifiant sans « _ » (unique)
+    const names = new Map(), cols = new Map();
+    for (const colId of colIds) {
+      let name = TCDGrist.label(colId) || colId.replace(/_/g, ' ');
+      if (cols.has(name) || name === 'id') { name = `${name} (${colId})`; }
+      names.set(colId, name);
+      cols.set(name, colId);
+    }
+
+    const fields = [];
+    const derivedAttributes = {};
+    const sorters = {};
+    const dateCols = [];
+    for (const colId of colIds) {
+      const name = names.get(colId);
+      const type = detectType(rawRecords, colId);
+      fields.push({ name, colId, type });
+      if (type !== 'date') { continue; }
+      dateCols.push(colId);
+      const [year, quarter, month] = DERIVED.map(d => name + DERIVED_SEP + d);
+      fields.push(...[year, quarter, month].map(n => ({ name: n, colId, type: 'date', parent: name })));
+      // Dérivés d'abord : ils lisent la date d'origine avant qu'elle ne soit remplacée par son libellé
+      derivedAttributes[year] = fromDate(name, derivers.dateFormat(name, '%y', true));
+      derivedAttributes[quarter] = fromDate(name, rec => `T${Math.floor(rec[name].getUTCMonth() / 3) + 1} ${rec[name].getUTCFullYear()}`);
+      derivedAttributes[month] = fromDate(name, derivers.dateFormat(name, '%n %y', true, MONTHS));
+      const withTime = rawRecords.some(r => { const d = asDate(r[colId]); return d && (d.getUTCHours() || d.getUTCMinutes()); });
+      derivedAttributes[name] = fromDate(name, derivers.dateFormat(name, withTime ? '%d/%m/%y %H:%M' : '%d/%m/%y', true));
+      sorters[name] = daySorter;
     }
 
     const records = new Array(rawRecords.length);
+    const years = new Set();
     for (let i = 0; i < rawRecords.length; i++) {
       const src = rawRecords[i];
       const rec = { id: src.id };
-      for (const f of fields) {
-        if (f.parent) { continue; }
-        const v = src[f.name];
-        if (f.type !== 'date') {
-          rec[f.name] = cellValue(v);
-          continue;
+      for (const colId of colIds) {
+        const v = src[colId];
+        if (dateCols.includes(colId)) {
+          const d = asDate(v);
+          rec[names.get(colId)] = d;
+          if (d) { years.add(d.getUTCFullYear()); }
+        } else {
+          rec[names.get(colId)] = cellValue(v);
         }
-        const d = asDate(v);
-        const yearAttr = f.name + DERIVED_SEP + 'Année';
-        const quarterAttr = f.name + DERIVED_SEP + 'Trimestre';
-        const monthAttr = f.name + DERIVED_SEP + 'Mois';
-        if (!d) {
-          rec[f.name] = rec[yearAttr] = rec[quarterAttr] = rec[monthAttr] = EMPTY;
-          continue;
-        }
-        const y = d.getUTCFullYear(), m = d.getUTCMonth(), q = Math.floor(m / 3) + 1;
-        const label = formatDate(d);
-        rec[f.name] = label;
-        setKey(f.name, label, d.getTime());
-        rec[yearAttr] = y;
-        const quarter = `T${q} ${y}`;
-        rec[quarterAttr] = quarter;
-        setKey(quarterAttr, quarter, y * 10 + q);
-        const month = `${MONTHS[m]} ${y}`;
-        rec[monthAttr] = month;
-        setKey(monthAttr, month, y * 100 + m);
       }
       records[i] = rec;
     }
-    return { records, fields, sortKeys };
-  }
 
-  const collator = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' });
-
-  /** Fonction de tri par attribut, compatible avec l'option `sorters` de pivottable */
-  function makeSorters(sortKeys) {
-    return attr => {
-      const keys = sortKeys[attr];
-      return (a, b) => {
-        if (a === b) { return 0; }
-        if (a === EMPTY) { return 1; }
-        if (b === EMPTY) { return -1; }
-        if (keys) {
-          const ka = keys.get(a), kb = keys.get(b);
-          if (ka !== undefined && kb !== undefined) { return ka - kb; }
-        }
-        if (typeof a === 'number' && typeof b === 'number') { return a - b; }
-        if (typeof a === 'number') { return -1; }
-        if (typeof b === 'number') { return 1; }
-        return collator.compare(a, b);
-      };
-    };
-  }
-
-  /** Nombre d'occurrences de chaque valeur d'un champ, trié */
-  function valueCounts(records, attr, sorter) {
-    const counts = new Map();
-    for (const rec of records) {
-      const v = rec[attr];
-      counts.set(v, (counts.get(v) || 0) + 1);
+    // Ordre chronologique des mois et trimestres (sortAs de pivottable)
+    const yearList = [...years].sort((a, b) => a - b);
+    const monthOrder = yearList.flatMap(y => MONTHS.map(m => `${m} ${y}`));
+    const quarterOrder = yearList.flatMap(y => [1, 2, 3, 4].map(q => `T${q} ${y}`));
+    for (const colId of dateCols) {
+      const name = names.get(colId);
+      sorters[name + DERIVED_SEP + 'Mois'] = sortAs(monthOrder);
+      sorters[name + DERIVED_SEP + 'Trimestre'] = sortAs(quarterOrder);
     }
-    return [...counts.entries()].sort((a, b) => sorter(a[0], b[0]));
+
+    /** Identifiant enregistré (colonne ou « colonne › Année ») → nom affiché */
+    const toAttr = key => {
+      const [colId, ...suffix] = String(key).split(DERIVED_SEP);
+      return names.has(colId) ? [names.get(colId), ...suffix].join(DERIVED_SEP) : null;
+    };
+    /** Nom affiché → identifiant enregistré */
+    const fromAttr = name => {
+      const field = fields.find(f => f.name === name);
+      if (!field) { return name; }
+      return field.parent ? field.colId + DERIVED_SEP + name.split(DERIVED_SEP).pop() : field.colId;
+    };
+
+    return { records, fields, derivedAttributes, sorters, toAttr, fromAttr };
   }
 
-  /**
-   * Libellé lisible d'un champ : libellé de la colonne dans Grist s'il est connu,
-   * sinon l'identifiant sans « _ ». Les champs dérivés gardent leur suffixe (« › Année »).
-   */
-  function label(attr) {
-    const [colId, ...suffix] = String(attr).split(DERIVED_SEP);
-    const base = TCDGrist.label(colId) || colId.replace(/_/g, ' ');
-    return [base, ...suffix].join(DERIVED_SEP);
-  }
-
-  return { EMPTY, prepare, makeSorters, valueCounts, label };
+  return { EMPTY, prepare };
 })();

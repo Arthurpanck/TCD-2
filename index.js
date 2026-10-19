@@ -1,11 +1,11 @@
 /**
  * Widget Tableau croisé dynamique pour Grist.
- * - Vue consultation par défaut (tableau seul, lisible)
+ * - pivotUI (pivottable.js) gère la configuration et le calcul ; subtotal.js le rendu (sous-totaux repliables)
+ * - Vue consultation par défaut : seul le tableau est visible
  * - Configuration ouverte via le bouton « Ouvrir la configuration » du panneau Grist (onEditOptions)
  * - Réglages enregistrés dans les options du widget (clé `settings`, compatible avec les versions précédentes)
  */
 const { el } = UI;
-const { label } = TCDData;
 const $id = id => document.getElementById(id);
 
 const DEFAULTS = {
@@ -27,22 +27,26 @@ const DEFAULTS = {
 // Réglages des versions précédentes qui n'existent plus (graphique, format des nombres, couleur d'accent)
 const OBSOLETE = ['chartType', 'decimals', 'scale', 'suffix', 'accent'];
 const ORDERS = ['key_a_to_z', 'value_a_to_z', 'value_z_to_a'];
+const RENDERERS = ['Table', 'Table avec barres', 'Carte de chaleur', 'Carte de chaleur par ligne', 'Carte de chaleur par colonne'];
 const DENSITIES = ['compact', 'standard', 'comfortable'];
 
 const state = {
   settings: normalizeSettings(null),
+  rawRecords: null,
   dataset: null,
   optionsLoaded: false,
   configOpen: false,
   snapshot: null,
+  // Options courantes de pivotUI et données calculées du dernier rendu
+  pvt: null,
   pd: null,
-  cellInfo: new WeakMap(),
-  // État d'affichage propre à la session (non enregistré) : groupes repliés, nombre de lignes affichées
-  view: { collapsed: new Set(), rowLimit: 0 },
+  // Repli de tous les groupes demandé depuis le menu Affichage (non enregistré)
+  collapseAll: false,
   aggLabel: '',
   saveTimer: null,
   savePending: false,
 };
+const $host = $('#app');
 
 // ---------------------------------------------------------------------------
 // Réglages
@@ -55,6 +59,7 @@ function normalizeSettings(raw, legacy = {}) {
   s.cols = list(s.cols);
   s.vals = list(s.vals);
   s.aggregatorName = TCDAggregators.normalizeName(s.aggregatorName);
+  s.rendererName = RENDERERS[RENDERERS.indexOf(s.rendererName)] || TCDConfig.rendererName(rendererOf(s.rendererName).kind, rendererOf(s.rendererName).scope);
   const ex = {};
   for (const [k, v] of Object.entries(s.exclusions || {})) {
     if (Array.isArray(v) && v.length) { ex[k] = v.map(String); }
@@ -86,26 +91,13 @@ function rendererOf(name) {
   }
 }
 
-/** Réglages effectivement utilisables avec les données actuelles */
-function effectiveSettings() {
-  const s = state.settings;
-  const known = new Set((state.dataset ? state.dataset.fields : []).map(f => f.name));
-  const keep = a => known.has(a);
-  const r = rendererOf(s.rendererName);
-  const n = TCDAggregators.numInputs(s.aggregatorName);
-  return { ...s, rows: s.rows.filter(keep), cols: s.cols.filter(keep), vals: s.vals.slice(0, n), renderer: r.kind, heatScope: r.scope };
-}
-
+/** Réglages modifiés depuis le panneau (hors pivotUI) */
 function update(patch) {
-  if (patch.rows && patch.rows.join('\0') !== state.settings.rows.join('\0')) {
-    state.view.collapsed.clear();
-  }
-  if (['rows', 'cols', 'exclusions', 'aggregatorName', 'vals'].some(k => k in patch)) { clearSelection(); }
   state.settings = normalizeSettings({ ...state.settings, ...patch });
   applyAppearance();
-  TCDConfig.refresh();
-  scheduleRender();
   scheduleSave();
+  if (['subtotals', 'rowTotals', 'colTotals', 'density', 'fontScale'].some(k => k in patch)) { refreshPivot(); }
+  else if (state.pvt) { TCDConfig.sync(state.pvt); }
 }
 
 function scheduleSave() {
@@ -147,32 +139,123 @@ function applyAppearance() {
 }
 
 // ---------------------------------------------------------------------------
-// Rendu
+// pivotUI
 // ---------------------------------------------------------------------------
 
-let renderQueued = false;
-function scheduleRender() {
-  if (renderQueued) { return; }
-  renderQueued = true;
-  requestAnimationFrame(() => { renderQueued = false; render(); });
+/** Options de rendu de subtotal.js qui dépendent des réglages du widget */
+function rendererOptions() {
+  const s = state.settings;
+  return {
+    table: {
+      // Un seul gestionnaire d'événement : il renseigne la cellule sur demande (survol, clic, clavier)
+      eventHandlers: { 'tcd-info': (e, value, filters, pivotData) => Object.assign(e.detail, { value, filters, pivotData }) },
+    },
+    arrowCollapsed: '▸',
+    arrowExpanded: '▾',
+    rowSubtotalDisplay: { disableSubtotal: !s.subtotals },
+    colSubtotalDisplay: { disableSubtotal: !s.subtotals },
+    collapseRowsAt: state.collapseAll ? 0 : null,
+    localeStrings: { totals: 'Total' },
+  };
+}
+
+/** (Re)construit pivotUI avec les réglages enregistrés */
+function build() {
+  if (!state.dataset || !state.optionsLoaded) { return; }
+  const ds = state.dataset;
+  const s = state.settings;
+  const toAttrs = list => list.map(ds.toAttr).filter(Boolean);
+  const exclusions = {};
+  for (const [k, v] of Object.entries(s.exclusions)) {
+    const attr = ds.toAttr(k);
+    if (attr) { exclusions[attr] = v; }
+  }
+
+  UI.closePopover();
+  // pivotUI remplace le contenu de son hôte : on met le widget de côté le temps de la construction
+  $host.find('.pvtUiCell, .pvtRendererArea, .pvtFilterBox, .pvtRowOrder, .pvtColOrder').remove();
+  const kids = $host.children().detach();
+  state.building = true;
+  $host.pivotUI(ds.records, {
+    rows: toAttrs(s.rows),
+    cols: toAttrs(s.cols),
+    vals: toAttrs(s.vals),
+    aggregatorName: s.aggregatorName,
+    rendererName: s.rendererName,
+    rowOrder: s.rowOrder,
+    colOrder: s.colOrder,
+    exclusions,
+    dataClass: $.pivotUtilities.SubtotalPivotData,
+    aggregators: TCDAggregators.forUI(name => ds.fromAttr(name).split(' › ')[0]),
+    renderers: TCDRender.renderers({ onPivotData: pd => { state.pd = pd; }, options: rendererOptions }),
+    derivedAttributes: ds.derivedAttributes,
+    sorters: ds.sorters,
+    hiddenAttributes: ['id'],
+    menuLimit: 1000,
+    unusedAttrsVertical: true,
+    localeStrings: {
+      selectAll: 'Tout cocher', selectNone: 'Tout décocher', filterResults: 'Rechercher une valeur…',
+      apply: 'Appliquer', cancel: 'Annuler', totals: 'Total',
+    },
+    onRefresh,
+  }, true, 'fr');
+  $host.prepend(kids);
+  TCDConfig.adopt($host);
+}
+
+/** Demande à pivotUI de recalculer avec l'état courant de son interface */
+function refreshPivot() {
+  $host.find('select.pvtRenderer').trigger('change');
+}
+
+/** Appelé par pivotUI après chaque calcul : enregistre les réglages et met en forme le tableau */
+function onRefresh(pvt) {
+  const ds = state.dataset;
+  const exclusions = {};
+  for (const [k, v] of Object.entries(pvt.exclusions || {})) { exclusions[ds.fromAttr(k)] = v.map(String); }
+  const patch = {
+    rows: pvt.rows.map(ds.fromAttr),
+    cols: pvt.cols.map(ds.fromAttr),
+    vals: pvt.vals.map(ds.fromAttr),
+    aggregatorName: pvt.aggregatorName,
+    rendererName: pvt.rendererName,
+    rowOrder: pvt.rowOrder,
+    colOrder: pvt.colOrder,
+    exclusions,
+  };
+  const before = state.settings;
+  const next = normalizeSettings({ ...before, ...patch });
+  const changed = JSON.stringify(next) !== JSON.stringify(before);
+  if (changed && ['rows', 'cols', 'exclusions', 'aggregatorName', 'vals'].some(k => JSON.stringify(next[k]) !== JSON.stringify(before[k]))) {
+    clearSelection();
+  }
+  if (next.rows.join('\0') !== before.rows.join('\0')) { state.collapseAll = false; }
+  state.settings = next;
+  // La première passe suit la construction : elle reflète les réglages reçus, sans les réenregistrer
+  if (changed && !state.building) { scheduleSave(); }
+  state.building = false;
+  state.pvt = pvt;
+  TCDConfig.sync(pvt);
+  showResult();
 }
 
 function isConfigured(s) {
   return s.rows.length > 0 || s.cols.length > 0;
 }
 
-function render() {
-  if (!state.dataset || !state.optionsLoaded) { return; }
+/** Affiche le tableau calculé par pivotUI, ou un message d'aide */
+function showResult() {
+  const s = state.settings;
+  const pvt = state.pvt;
   const out = $id('output');
-  const s = effectiveSettings();
-  state.aggLabel = TCDAggregators.describe(s.aggregatorName, s.vals);
-  state.pd = null;
+  state.aggLabel = pvt ? TCDAggregators.describe(pvt.aggregatorName, pvt.vals) : '';
+  out.classList.remove('is-loading');
 
   if (!state.dataset.records.length) {
     renderSummary(s);
     return showMessage('table', 'La table source est vide', "Ajoutez des lignes dans la table liée à ce widget : le tableau croisé se mettra à jour automatiquement.");
   }
-  if (!isConfigured(s)) {
+  if (!pvt || !isConfigured(s)) {
     renderSummary(s);
     if (state.configOpen) {
       return showMessage('grid', 'Construisez votre tableau', 'Glissez un champ dans « Lignes » ou « Colonnes », ou cliquez sur un champ pour choisir où le placer.');
@@ -180,32 +263,24 @@ function render() {
     return showMessage('grid', "Ce tableau croisé n'est pas encore configuré",
       'Pour le construire, cliquez sur « Ouvrir la configuration » dans le panneau de droite de Grist (onglet du widget).');
   }
-
-  let table;
-  try {
-    const result = TCDRender.render(state.dataset, s, state.aggLabel, state.view);
-    state.pd = result.pd;
-    state.cellInfo = result.info;
-    table = result.table;
-  } catch (e) {
-    console.error(e);
+  const table = out.querySelector('.pvtRendererArea > table.pvtTable');
+  if (!table) {
     renderSummary(s);
-    return showMessage('info', 'Impossible de calculer ce tableau', String(e && e.message || e));
+    return showMessage('info', 'Impossible de calculer ce tableau', $(out).find('.pvtRendererArea').text());
   }
-  renderSummary(s);
-  const { scrollTop, scrollLeft } = out;
   out.classList.remove('is-message');
-  out.replaceChildren(table);
-  out.scrollTop = scrollTop;
-  out.scrollLeft = scrollLeft;
+  out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
+  TCDRender.decorate(table, { aggLabel: state.aggLabel, rowTotals: s.rowTotals, colTotals: s.colTotals, rows: pvt.rows.length, cols: pvt.cols.length });
   TCDRender.stick(table);
   indexColumns(table);
+  renderSummary(s);
 }
 
 function showMessage(icon, title, text, action) {
   const out = $id('output');
   out.classList.add('is-message');
-  out.replaceChildren(el('div', { class: 'empty' },
+  out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
+  out.append(el('div', { class: 'empty' },
     el('div', { class: 'empty-icon', html: Icons.svg(icon, 26) }),
     el('h3', {}, title),
     el('p', {}, text),
@@ -214,10 +289,11 @@ function showMessage(icon, title, text, action) {
 
 function renderSummary(s) {
   const box = $id('summary');
+  const pvt = state.pvt;
   const parts = [];
-  if (isConfigured(s)) {
+  if (pvt && isConfigured(s)) {
     parts.push(el('span', { class: 'sum-agg' }, state.aggLabel));
-    const dims = [s.rows.map(label).join(', '), s.cols.map(label).join(', ')].filter(Boolean);
+    const dims = [pvt.rows.join(', '), pvt.cols.join(', ')].filter(Boolean);
     if (dims.length) {
       parts.push(el('span', { class: 'sum-sep' }, 'par'));
       dims.forEach((d, i) => {
@@ -228,13 +304,17 @@ function renderSummary(s) {
   } else {
     parts.push(el('span', { class: 'sum-agg' }, 'Tableau croisé dynamique'));
   }
+  const filters = pvt ? Object.entries(pvt.exclusions || {}).filter(([, v]) => v.length) : [];
   const total = state.dataset ? state.dataset.records.length : 0;
-  const shown = state.pd ? state.pd.tcdRecordCount : total;
+  let shown = total;
+  if (filters.length && state.pd) {
+    shown = 0;
+    state.pd.forEachMatchingRecord({}, () => { shown++; });
+  }
   const meta = shown === total
     ? `${total.toLocaleString('fr-FR')} ligne${total > 1 ? 's' : ''}`
     : `${shown.toLocaleString('fr-FR')} / ${total.toLocaleString('fr-FR')} lignes`;
   parts.push(el('span', { class: 'sum-meta' }, meta));
-  const filters = Object.entries(state.settings.exclusions);
   if (filters.length) {
     const btn = el('button', {
       type: 'button', class: 'sum-filters', 'aria-haspopup': 'true',
@@ -244,7 +324,7 @@ function renderSummary(s) {
       if (UI.isOpenFor(btn)) { return UI.closePopover(); }
       UI.openPopover(btn, el('div', { class: 'menu' },
         el('div', { class: 'menu-title' }, 'Filtres actifs'),
-        el('div', { class: 'filter-list' }, filters.map(([a, v]) => TCDConfig.filterPill(a, v, true)))));
+        el('div', { class: 'filter-list' }, filters.map(([a, v]) => TCDConfig.filterPill(a, v.length, true)))));
     });
     parts.push(btn);
   }
@@ -252,15 +332,18 @@ function renderSummary(s) {
   box.title = box.textContent;
 }
 
+// Cellules de valeurs : celles de subtotal.js (détail, sous-totaux, totaux)
+const VALUE_CELLS = 'td.pvtVal, td.pvtTotal, td.pvtGrandTotal';
+const isShown = td => td.style.display !== 'none' && td.offsetParent !== null;
+
 // Colonnes indexées pour le surlignage en croix au survol
 let colCells = new Map();
 let hoverCol = null;
 function indexColumns(table) {
   colCells = new Map();
   hoverCol = null;
-  table.querySelectorAll('td.pvtVal, td.pvtSubtotal').forEach(td => {
-    const j = td.dataset.col;
-    if (j === undefined) { return; }
+  table.querySelectorAll('td.pvtVal[data-colnode]').forEach(td => {
+    const j = td.dataset.colnode;
     if (!colCells.has(j)) { colCells.set(j, []); }
     colCells.get(j).push(td);
   });
@@ -270,16 +353,15 @@ function indexColumns(table) {
 // Interactions sur le tableau : survol, info-bulle, détail
 // ---------------------------------------------------------------------------
 
-function cellKeys(td) {
-  return state.cellInfo.get(td) || null;
-}
-
-function criteriaFor(keys) {
-  const pd = state.pd;
-  const criteria = {};
-  pd.rowAttrs.forEach((a, i) => { if (keys.rowKey[i] !== undefined) { criteria[a] = keys.rowKey[i]; } });
-  pd.colAttrs.forEach((a, i) => { if (keys.colKey[i] !== undefined) { criteria[a] = keys.colKey[i]; } });
-  return criteria;
+/**
+ * Valeur, critères et données d'une cellule, fournis par subtotal.js
+ * (gestionnaire « tcd-info » déclaré dans les options de rendu).
+ * @returns {{value: number, filters: Object, pivotData: Object}|null}
+ */
+function cellInfo(td) {
+  const detail = {};
+  td.dispatchEvent(new CustomEvent('tcd-info', { detail }));
+  return detail.filters ? detail : null;
 }
 
 const tooltip = $id('tooltip');
@@ -293,13 +375,12 @@ function setHoverCol(key) {
 }
 
 function showTooltip(td, x, y) {
-  const keys = cellKeys(td);
-  if (!keys) { return; }
-  const agg = keys.agg;
-  const lines = Object.entries(criteriaFor(keys)).map(([a, v]) => el('div', { class: 'tt-line' }, el('span', {}, label(a)), el('b', {}, String(v))));
+  const info = cellInfo(td);
+  if (!info) { return; }
+  const lines = Object.entries(info.filters).map(([a, v]) => el('div', { class: 'tt-line' }, el('span', {}, a), el('b', {}, String(v))));
   tooltip.replaceChildren(
     ...(lines.length ? lines : [el('div', { class: 'tt-line' }, el('span', {}, 'Ensemble des données'))]),
-    el('div', { class: 'tt-value' }, el('span', {}, state.aggLabel), el('b', {}, agg.format(agg.value()))),
+    el('div', { class: 'tt-value' }, el('span', {}, state.aggLabel), el('b', {}, td.textContent)),
     el('div', { class: 'tt-hint' }, 'Cliquez pour voir le détail'));
   tooltip.hidden = false;
   const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
@@ -318,11 +399,11 @@ function hideTooltip() {
 function setupTableInteractions() {
   const out = $id('output');
   out.addEventListener('mouseover', e => {
-    const td = e.target.closest('td.pvtVal, td.pvtSubtotal');
-    setHoverCol(td && td.dataset.col !== undefined ? td.dataset.col : null);
+    const td = e.target.closest('td.pvtVal[data-colnode]');
+    setHoverCol(td ? td.dataset.colnode : null);
   });
   out.addEventListener('mousemove', e => {
-    const td = e.target.closest('td.pvtVal, td.pvtSubtotal, td.pvtTotal, td.pvtGrandTotal');
+    const td = e.target.closest(VALUE_CELLS);
     hideTooltip();
     if (!td || document.body.classList.contains('is-dragging')) { return; }
     tooltipTimer = setTimeout(() => showTooltip(td, e.clientX, e.clientY), 350);
@@ -331,65 +412,52 @@ function setupTableInteractions() {
   out.addEventListener('keydown', onTableKey);
   out.addEventListener('scroll', hideTooltip, { passive: true });
   out.addEventListener('click', e => {
-    const toggle = e.target.closest('.grp-toggle');
-    if (toggle) { return toggleGroup(toggle.dataset.group); }
-    if (e.target.closest('[data-action="show-all"]')) {
-      state.view.rowLimit = Infinity;
-      return scheduleRender();
-    }
-    const td = e.target.closest('td.pvtVal, td.pvtSubtotal, td.pvtTotal, td.pvtGrandTotal');
-    const keys = td && cellKeys(td);
-    if (keys) { hideTooltip(); selectCell(keys, td); }
+    const td = e.target.closest(VALUE_CELLS);
+    const info = td && cellInfo(td);
+    if (info) { hideTooltip(); selectCell(info, td); }
+    // Un groupe replié ou déplié par subtotal.js change la largeur des colonnes figées
+    if (e.target.closest('th')) { requestAnimationFrame(restick); }
   });
 
   // Recalcule les en-têtes figés quand la taille change (panneau Grist ouvert, redimensionnement…)
   let raf = null;
   new ResizeObserver(() => {
     cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      const table = out.querySelector('table.pvtTable');
-      if (table) { TCDRender.stick(table); }
-    });
+    raf = requestAnimationFrame(restick);
   }).observe(out);
 }
 
-function toggleGroup(key) {
-  const c = state.view.collapsed;
-  c.has(key) ? c.delete(key) : c.add(key);
-  scheduleRender();
+function restick() {
+  const table = $id('output').querySelector('table.pvtTable');
+  if (table) { TCDRender.stick(table); }
 }
 
-/** Replie (ou déplie) tous les groupes du premier niveau */
+/** Replie (ou déplie) tous les groupes du premier niveau (option collapseRowsAt de subtotal.js) */
 function setAllCollapsed(collapse) {
-  state.view.collapsed = new Set();
-  if (collapse && state.pd) {
-    for (const key of state.pd.getRowKeys()) { state.view.collapsed.add(String(key[0])); }
-  }
-  scheduleRender();
+  state.collapseAll = collapse;
+  refreshPivot();
 }
-
-const NAV_CELLS = 'td.pvtVal, td.pvtSubtotal, td.pvtTotal, td.pvtGrandTotal';
 
 /** Navigation au clavier : flèches entre les cellules, Entrée pour le détail */
 function onTableKey(e) {
   const table = $id('output').querySelector('table.pvtTable');
   if (!table || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Home', 'End'].includes(e.key)) { return; }
-  const current = document.activeElement && document.activeElement.matches && document.activeElement.matches(NAV_CELLS) ? document.activeElement : null;
+  const current = document.activeElement && document.activeElement.matches && document.activeElement.matches(VALUE_CELLS) ? document.activeElement : null;
+  const cellsOf = tr => [...tr.querySelectorAll(VALUE_CELLS)].filter(isShown);
   if (!current) {
     if (e.key.startsWith('Arrow')) {
       e.preventDefault();
-      focusCell(table.querySelector(NAV_CELLS));
+      focusCell([...table.querySelectorAll(VALUE_CELLS)].find(isShown));
     }
     return;
   }
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
-    const keys = cellKeys(current);
-    if (keys) { selectCell(keys, current); }
+    const info = cellInfo(current);
+    if (info) { selectCell(info, current); }
     return;
   }
   e.preventDefault();
-  const cellsOf = tr => [...tr.querySelectorAll(NAV_CELLS)];
   const row = current.parentElement;
   const index = cellsOf(row).indexOf(current);
   let target = null;
@@ -418,9 +486,9 @@ let selectedTd = null;
 
 /** Colonnes utiles au détail : celles regroupées (lignes, colonnes) et celles calculées (valeurs) */
 function detailFields() {
-  const s = effectiveSettings();
+  const pvt = state.pvt;
   const byName = new Map(state.dataset.fields.map(f => [f.name, f]));
-  const names = [...s.rows, ...s.cols, ...s.vals]
+  const names = [...pvt.rows, ...pvt.cols, ...pvt.vals]
     .map(n => (byName.get(n) && byName.get(n).parent) || n)
     .filter((n, i, all) => byName.has(n) && all.indexOf(n) === i);
   return names.map(n => byName.get(n));
@@ -430,37 +498,34 @@ function detailFields() {
  * Clic sur une cellule : met la cellule en évidence et transmet ses lignes aux widgets Grist liés
  * (« Sélectionner par » ce widget). Le panneau de détail s'ouvre si le réglage est actif.
  */
-function selectCell(keys, td) {
+function selectCell(info, td) {
   const records = [];
-  state.pd.forEachMatchingRecord(criteriaFor(keys), rec => { records.push(rec); });
+  info.pivotData.forEachMatchingRecord(info.filters, rec => { records.push(rec); });
   if (selectedTd) { selectedTd.classList.remove('is-selected'); }
   selectedTd = td || null;
   if (td) { td.classList.add('is-selected'); }
   selectRows(records.map(r => r.id).filter(id => typeof id === 'number'));
-  if (state.settings.clickDetail) { openDrawer(keys, records); }
+  if (state.settings.clickDetail) { openDrawer(info, td, records); }
 }
 
-/** Panneau de détail d'une cellule : keys = { rowKey, colKey, agg } */
-function openDrawer(keys, records) {
-  const criteria = criteriaFor(keys);
-  const agg = keys.agg;
-
-  $id('drawer-value').textContent = agg.format(agg.value()) || '—';
+/** Panneau de détail d'une cellule */
+function openDrawer(info, td, records) {
+  $id('drawer-value').textContent = td.textContent || '—';
   $id('drawer-sub').textContent = `${state.aggLabel} · ${records.length.toLocaleString('fr-FR')} ligne${records.length > 1 ? 's' : ''}`;
-  const entries = Object.entries(criteria);
+  const entries = Object.entries(info.filters);
   $id('drawer-filters').replaceChildren(...(entries.length
-    ? entries.map(([a, v]) => el('span', { class: 'crit' }, el('span', {}, label(a)), el('b', {}, String(v))))
+    ? entries.map(([a, v]) => el('span', { class: 'crit' }, el('span', {}, a), el('b', {}, String(v))))
     : [el('span', { class: 'crit' }, el('b', {}, 'Toutes les lignes'))]));
 
   const LIMIT = 300;
   const fields = detailFields();
   const body = $id('drawer-body');
   body.replaceChildren(el('table', { class: 'detail-table' },
-    el('thead', {}, el('tr', {}, fields.map(f => el('th', { class: f.type === 'number' ? 'num' : '' }, label(f.name))))),
+    el('thead', {}, el('tr', {}, fields.map(f => el('th', { class: f.type === 'number' ? 'num' : '' }, f.name)))),
     el('tbody', {}, records.slice(0, LIMIT).map(rec => el('tr', {}, fields.map(f => {
       const v = rec[f.name];
       return el('td', { class: (f.type === 'number' ? 'num' : '') + (v === TCDData.EMPTY ? ' is-empty' : '') },
-        typeof v === 'number' ? TCDGrist.formatter(f.name)(v) : String(v));
+        typeof v === 'number' ? TCDGrist.formatter(f.colId)(v) : String(v));
     }))))));
   if (records.length > LIMIT) {
     body.append(el('p', { class: 'hint' }, `Seules les ${LIMIT} premières lignes sont affichées.`));
@@ -512,7 +577,7 @@ function openDisplayMenu(anchor) {
   const root = el('div', { class: 'menu display-menu' },
     el('div', { class: 'menu-title' }, 'Mise en forme'),
     seg([['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']], r.kind,
-      v => update({ rendererName: TCDConfig.rendererName(v, r.scope) })),
+      v => TCDConfig.setRenderer(TCDConfig.rendererName(v, r.scope))),
     s.subtotals && s.rows.length > 1 ? el('div', { class: 'menu-title' }, 'Groupes') : null,
     s.subtotals && s.rows.length > 1 ? el('div', { class: 'segmented' },
       el('button', { type: 'button', onclick: () => { setAllCollapsed(true); UI.closePopover(); } }, 'Tout replier'),
@@ -534,7 +599,7 @@ function exportMatrix() {
   const cks = colKeys.length ? colKeys : [[]];
   const withRowTotal = colKeys.length > 0 && state.settings.rowTotals;
   const value = (rk, ck) => pd.getAggregator(rk, ck).value();
-  const header = [...pd.rowAttrs.map(label),
+  const header = [...pd.rowAttrs,
     ...(colKeys.length ? colKeys.map(k => k.join(' / ')) : [state.aggLabel]),
     ...(withRowTotal ? ['Total'] : [])];
   const rows = [header];
@@ -601,10 +666,16 @@ function openExportMenu(anchor) {
 // ---------------------------------------------------------------------------
 
 function openConfig() {
-  // Recharge les formats : ils ont pu changer dans Grist depuis l'ouverture
+  // Recharge les formats et libellés : ils ont pu changer dans Grist depuis l'ouverture
+  const before = TCDGrist.signature();
   Promise.resolve(grist.getSelectedTableId ? grist.getSelectedTableId() : null)
     .then(tableId => TCDGrist.load(tableId))
-    .then(() => { TCDConfig.refresh(); scheduleRender(); });
+    .then(() => {
+      if (TCDGrist.signature() !== before && state.rawRecords) {
+        state.dataset = TCDData.prepare(state.rawRecords);
+        build();
+      }
+    });
   if (!state.configOpen) {
     state.configOpen = true;
     state.snapshot = JSON.parse(JSON.stringify(state.settings));
@@ -613,23 +684,26 @@ function openConfig() {
   $id('config').hidden = false;
   document.body.classList.add('is-config');
   setSaveState(state.savePending ? 'saving' : 'saved');
-  TCDConfig.refresh();
-  scheduleRender();
+  if (state.pvt) { showResult(); restick(); }
 }
 
 function closeConfig() {
   state.configOpen = false;
   state.snapshot = null;
   UI.closePopover();
+  TCDConfig.closeFilters();
   $id('config').hidden = true;
   document.body.classList.remove('is-config');
   saveNow();
-  scheduleRender();
+  if (state.pvt) { showResult(); restick(); }
 }
 
 function revert() {
   if (!state.snapshot) { return; }
-  update(JSON.parse(JSON.stringify(state.snapshot)));
+  state.settings = normalizeSettings(JSON.parse(JSON.stringify(state.snapshot)));
+  applyAppearance();
+  scheduleSave();
+  build();
   UI.toast('Modifications annulées.', 'info');
 }
 
@@ -640,8 +714,8 @@ function revert() {
 const app = {
   settings: () => state.settings,
   fields: () => (state.dataset ? state.dataset.fields : []),
-  dataset: () => state.dataset || { records: [], fields: [], sortKeys: {} },
   update,
+  refreshPivot,
   rendererOf,
   closeConfig,
   revert,
@@ -650,16 +724,13 @@ const app = {
 function handleOptions(options) {
   options = options || {};
   const incoming = normalizeSettings(options.settings, { columnSize: options.columnSize });
+  const first = !state.optionsLoaded;
   state.optionsLoaded = true;
   // Ignore l'écho de nos propres enregistrements
-  if (state.savePending || JSON.stringify(incoming) === JSON.stringify(state.settings)) {
-    scheduleRender();
-    return;
-  }
+  if (!first && (state.savePending || JSON.stringify(incoming) === JSON.stringify(state.settings))) { return; }
   state.settings = incoming;
   applyAppearance();
-  TCDConfig.refresh();
-  scheduleRender();
+  build();
 }
 
 function start() {
@@ -688,11 +759,11 @@ function start() {
   });
 
   // Changement de thème Grist (clair/sombre) : les couleurs calculées doivent être rafraîchies
-  new MutationObserver(scheduleRender).observe(document.documentElement, { attributes: true, attributeFilter: ['data-grist-appearance'] });
+  new MutationObserver(() => { if (state.pvt) { refreshPivot(); } }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-grist-appearance'] });
 
   grist.onOptions(handleOptions);
   // Si Grist n'envoie pas d'options (widget neuf), on affiche quand même
-  setTimeout(() => { if (!state.optionsLoaded) { state.optionsLoaded = true; scheduleRender(); } }, 1500);
+  setTimeout(() => { if (!state.optionsLoaded) { state.optionsLoaded = true; build(); } }, 1500);
 
   let columnsLoaded = null;
   grist.onRecords(async records => {
@@ -702,10 +773,9 @@ function start() {
         .then(tableId => TCDGrist.load(tableId));
     }
     await columnsLoaded;
+    state.rawRecords = records;
     state.dataset = TCDData.prepare(records);
-    $id('output').classList.remove('is-loading');
-    if (state.configOpen) { TCDConfig.refresh(); }
-    scheduleRender();
+    build();
   });
 }
 

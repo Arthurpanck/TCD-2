@@ -13,6 +13,7 @@ let failures = 0, passed = 0;
 
 async function open(options, { width = 1280, height = 760, data, meta } = {}) {
   const page = await browser.newPage({ viewport: { width, height } });
+  page.setDefaultTimeout(5000);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') { errors.push(m.text()); } });
@@ -44,6 +45,8 @@ const savedSettings = page => page.evaluate(() => {
   const log = window.__mockGrist.setLog.filter(([k]) => k === 'settings');
   return log.length ? log[log.length - 1][1] : null;
 });
+// Cellules de détail (hors sous-totaux et totaux) du rendu de subtotal.js
+const LEAF = 'table.pvtTable tbody td.pvtVal:not(.pvtRowSubtotal):not(.pvtColSubtotal):not(.pvtTotal)';
 const base = { rows: ['Region'], cols: ['Annee'], vals: ['Montant'], aggregatorName: 'Somme', rendererName: 'Table' };
 
 console.log('Widget TCD — tests');
@@ -97,20 +100,20 @@ await test('message quand la table source est vide', async () => {
 await test('ajout d’un champ par clic puis enregistrement dans Grist', async () => {
   const page = await open({ settings: base });
   await page.evaluate(() => grist.__openConfig());
-  await page.click('#zone-unused li.chip[data-attr="Statut"]');
+  await page.click('#slot-unused li.chip[data-attr="Statut"]');
   await page.click('.menu-item:has-text("Ajouter aux colonnes")');
   await page.waitForTimeout(600);
   const s = await savedSettings(page);
   assert(s && s.cols.join() === 'Annee,Statut', 'colonnes enregistrées : ' + JSON.stringify(s && s.cols));
-  assert(await page.locator('#zone-cols li.chip').count() === 2, 'puce non ajoutée');
+  assert(await page.locator('#slot-cols li.chip').count() === 2, 'puce non ajoutée');
   await page.close();
 });
 
 await test('glisser-déposer d’un champ vers les lignes', async () => {
   const page = await open({ settings: base });
   await page.evaluate(() => grist.__openConfig());
-  const src = page.locator('#zone-unused li.chip[data-attr="Dispositif"]');
-  const dst = page.locator('#zone-rows');
+  const src = page.locator('#slot-unused li.chip[data-attr="Dispositif"]');
+  const dst = page.locator('#slot-rows td.pvtRows');
   const a = await src.boundingBox(), b = await dst.boundingBox();
   await page.mouse.move(a.x + 20, a.y + a.height / 2);
   await page.mouse.down();
@@ -126,10 +129,11 @@ await test('glisser-déposer d’un champ vers les lignes', async () => {
 await test('filtre de valeurs : exclusion, résumé et enregistrement', async () => {
   const page = await open({ settings: base });
   await page.evaluate(() => grist.__openConfig());
-  await page.click('#zone-rows li.chip');
+  await page.click('#slot-rows li.chip');
   await page.click('.menu-item:has-text("Filtrer")');
-  await page.locator('.fp-item', { hasText: 'Bretagne' }).locator('input').uncheck();
-  await page.click('.fp-foot .btn-primary');
+  const box = page.locator('#filter-layer .pvtFilterBox:visible');
+  await box.locator('label', { hasText: 'Bretagne' }).locator('input').uncheck();
+  await box.locator('.btn-primary').click();
   await page.waitForTimeout(600);
   assert(await page.locator('th.pvtRowLabel', { hasText: 'Bretagne' }).count() === 0, 'Bretagne toujours affichée');
   assert((await page.locator('.sum-meta').textContent()).includes('/ 400'), 'résumé sans le nombre de lignes filtrées');
@@ -140,7 +144,7 @@ await test('filtre de valeurs : exclusion, résumé et enregistrement', async ()
 
 await test('détail d’une cellule et sélection transmise aux widgets liés', async () => {
   const page = await open({ settings: { ...base, cols: ['Statut'] } });
-  await page.click('td.pvtVal[data-row="0"][data-col="0"]');
+  await page.locator(LEAF).first().click();
   await page.waitForTimeout(250);
   assert(await page.locator('#drawer').isVisible(), 'panneau de détail absent');
   const n = await page.locator('.detail-table tbody tr').count();
@@ -155,26 +159,35 @@ await test('détail d’une cellule et sélection transmise aux widgets liés', 
 
 await test('sous-totaux par groupe, repli et dépli', async () => {
   const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'] } });
-  assert(await page.locator('tr.pvtSubtotalRow').count() === 8, 'un sous-total par région attendu');
-  const sub = await page.locator('tr.pvtSubtotalRow').first().locator('td.rowTotal').textContent();
-  const total = await page.locator('tr.pvtDataRow').first().locator('th.pvtRowLabel').first().textContent();
-  assert(total.includes('Auvergne'), 'premier groupe inattendu : ' + total);
+  const groups = page.locator('tbody th.pvtRowLabel.rowcol0');
+  assert(await groups.count() === 8, 'un sous-total par région attendu');
+  const first = groups.first();
+  assert((await first.textContent()).includes('Auvergne'), 'premier groupe inattendu : ' + await first.textContent());
+  const sub = await page.locator('tbody tr').first().locator('td.rowTotal').textContent();
   assert(sub === '5372983', 'sous-total inattendu : ' + sub);
-  await page.locator('.grp-toggle').first().click();
+  const leaves = page.locator('tbody th.pvtRowLabel.rowcol1:visible');
+  assert(await leaves.count() === 40, 'lignes de détail : ' + await leaves.count());
+  await first.click();
   await page.waitForTimeout(100);
-  assert(await page.locator('tr.pvtSubtotalRow.is-collapsed').count() === 1, 'groupe non replié');
-  assert(await page.locator('tr.pvtDataRow').count() === 35, 'lignes du groupe replié encore visibles');
-  await page.locator('tr.is-collapsed .grp-toggle').click();
+  assert(await page.locator('tbody th.pvtRowLabel.rowcol0.rowcollapsed').count() === 1, 'groupe non replié');
+  assert(await leaves.count() === 35, 'lignes du groupe replié encore visibles');
+  await first.click();
   await page.waitForTimeout(100);
-  assert(await page.locator('tr.pvtDataRow').count() === 40, 'groupe non déplié');
+  assert(await leaves.count() === 40, 'groupe non déplié');
+  await page.evaluate(() => setAllCollapsed(true));
+  await page.waitForTimeout(150);
+  assert(await leaves.count() === 0, '« Tout replier » doit replier chaque région');
   await page.close();
 });
 
-await test('tri par valeur décroissante : les groupes restent regroupés', async () => {
+await test('tri par valeur décroissante (pivottable) : les groupes restent regroupés', async () => {
   const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'], rowOrder: 'value_z_to_a' } });
-  const firsts = await page.locator('th.pvtRowLabel[data-level="0"]:not(.pvtSubtotalLabel)').allTextContents();
+  const firsts = await page.locator('tbody th.pvtRowLabel.rowcol0').allTextContents();
   assert(firsts.length === 8, `chaque région doit apparaître une seule fois (${firsts.length})`);
-  assert(firsts[0].includes('Nouvelle-Aquitaine'), 'la région au plus fort total doit être en tête : ' + firsts[0]);
+  // pivottable trie les lignes de détail par valeur : le groupe de la plus forte ligne arrive en tête
+  assert(firsts[0].includes('Bretagne'), 'la région de la plus forte ligne doit être en tête : ' + firsts[0]);
+  const values = await page.locator('tbody tr').nth(1).locator('td.rowTotal').textContent();
+  assert(Number(values) >= Number(await page.locator('tbody tr').nth(2).locator('td.rowTotal').textContent()), 'lignes non triées par valeur décroissante');
   await page.close();
 });
 
@@ -184,8 +197,8 @@ await test('navigation au clavier dans le tableau', async () => {
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowDown');
-  const focused = await page.evaluate(() => [document.activeElement.dataset.row, document.activeElement.dataset.col].join(','));
-  assert(focused === '1,1', 'cellule active inattendue : ' + focused);
+  const focused = await page.evaluate(() => document.activeElement.matches('td.pvtVal') && document.activeElement.dataset.colnode);
+  assert(focused === '1', 'cellule active inattendue : ' + focused);
   await page.keyboard.press('Enter');
   await page.waitForTimeout(250);
   assert(await page.locator('#drawer').isVisible(), 'Entrée doit ouvrir le détail');
@@ -197,11 +210,12 @@ await test('filtres rapides depuis la barre de résumé', async () => {
   await page.click('.sum-filters');
   await page.click('.popover .filter-pill-main');
   await page.waitForTimeout(150);
-  const box = await page.locator('.popover').boundingBox();
+  const filter = page.locator('#filter-layer .pvtFilterBox:visible');
+  const box = await filter.boundingBox();
   const anchor = await page.locator('.sum-filters').boundingBox();
   assert(Math.abs(box.y - (anchor.y + anchor.height + 6)) < 4, `fenêtre de filtre mal positionnée (y=${box.y})`);
-  await page.locator('.fp-item', { hasText: 'Bretagne' }).locator('input').check();
-  await page.click('.fp-foot .btn-primary');
+  await filter.locator('label', { hasText: 'Bretagne' }).locator('input').check();
+  await filter.locator('.btn-primary').click();
   await page.waitForTimeout(500);
   assert(await page.locator('.sum-filters').count() === 0, 'le filtre doit être retiré');
   await page.close();
@@ -222,7 +236,7 @@ await test('données hétérogènes : vides, booléens, listes et erreurs Grist'
   assert(cols.includes('x, y'), 'liste de choix non lisible : ' + cols.join('|'));
   assert(await page.locator('th.pvtAxisLabel', { hasText: 'Nom service' }).count() === 1, 'libellé de champ non embelli');
   assert(page.errors.length === 0, page.errors.join(' | '));
-  await page.evaluate(() => update({ rows: [], cols: ['Erreur'] }));
+  await page.evaluate(() => { state.settings = normalizeSettings({ ...state.settings, rows: [], cols: ['Erreur'] }); build(); });
   await page.waitForTimeout(150);
   assert((await page.locator('th.pvtColLabel').allTextContents()).includes('#Erreur'), 'erreur de formule non signalée');
   assert(page.errors.length === 0, page.errors.join(' | '));
@@ -250,7 +264,7 @@ await test('accès complet : format et libellés des colonnes repris de Grist', 
 await test('format par défaut : pas de bruit de virgule flottante dans les totaux', async () => {
   const data = [0.1, 0.2, 0.3].map((v, i) => ({ id: i + 1, Groupe: 'A', Valeur: v }));
   const page = await open({ settings: { rows: ['Groupe'], cols: [], vals: ['Valeur'], aggregatorName: 'Somme' } }, { data });
-  const total = await page.locator('tr.pvtTotalsRow td').last().textContent();
+  const total = await page.locator('td.pvtGrandTotal').textContent();
   assert(total === '0,6' || total === '0.6', 'total attendu 0,6 : ' + total);
   await page.close();
 });
@@ -276,7 +290,7 @@ await test('anciens réglages graphique / format / couleur ignorés et nettoyés
 
 await test('clic : détail limité aux colonnes du tableau, sélection gardée pour les vues liées', async () => {
   const page = await open({ settings: { ...base, cols: ['Statut'] } });
-  await page.click('td.pvtVal[data-row="0"][data-col="0"]');
+  await page.locator(LEAF).first().click();
   await page.waitForTimeout(250);
   const heads = await page.locator('.detail-table th').allTextContents();
   assert(heads.join('|') === 'Region|Statut|Montant', 'colonnes du détail : ' + heads.join('|'));
@@ -288,7 +302,7 @@ await test('clic : détail limité aux colonnes du tableau, sélection gardée p
   assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'second Échap : la sélection doit être effacée');
   await page.evaluate(() => update({ clickDetail: false }));
   await page.waitForTimeout(100);
-  await page.click('td.pvtVal[data-row="1"][data-col="1"]');
+  await page.locator(LEAF).nth(5).click();
   await page.waitForTimeout(250);
   assert(await page.locator('#drawer').isHidden(), 'détail désactivé : le panneau ne doit pas s’ouvrir');
   assert((await page.evaluate(() => window.__mockGrist.selected) || []).length > 0, 'détail désactivé : la sélection doit quand même être transmise');

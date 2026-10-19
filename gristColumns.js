@@ -120,5 +120,8 @@ const TCDGrist = (function () {
     return col && col.label ? col.label : null;
   }
 
-  return { load, formatter, label, isAvailable: () => meta.available };
+  /** Empreinte des métadonnées, pour savoir si les libellés ou formats ont changé */
+  const signature = () => JSON.stringify(meta);
+
+  return { load, formatter, label, signature, isAvailable: () => meta.available };
 })();

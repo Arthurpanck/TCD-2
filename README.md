@@ -1,6 +1,6 @@
 # Widget Tableau Croisé Dynamique (TCD) pour Grist 🇫🇷
 
-Ce widget permet de créer un **tableau croisé dynamique** à partir des données sources de Grist, basé sur le moteur de calcul de [pivottable.js](https://pivottable.js.org/examples/).
+Ce widget permet de créer un **tableau croisé dynamique** à partir des données sources de Grist. Il s'appuie entièrement sur [pivottable.js](https://pivottable.js.org/examples/) (interface `pivotUI`, calculs, filtres, tris) et sur [subtotal.js](https://github.com/nagarajanchinnasamy/subtotal) (sous-totaux repliables, carte de chaleur, barres), habillés pour s'intégrer à Grist.
 
 Il s'agit d'une refonte du widget intégré à Grist Labs, dont l'auteur original est [jperon](https://github.com/jperon).
 
@@ -26,7 +26,7 @@ Les réglages sont enregistrés automatiquement dans le widget.
 - Survol en croix (ligne et colonne) et info-bulle détaillant chaque cellule
 - Clic sur une cellule : ses lignes sont transmises aux widgets Grist liés (« Sélectionner par » ce widget) et, si l'option est active, affichées dans un panneau de détail limité aux colonnes du tableau
 - Filtres rapides depuis la barre de résumé
-- Sous-totaux par groupe, repliables (individuellement ou tous à la fois)
+- Sous-totaux par groupe (subtotal.js), repliables en cliquant sur un groupe ou sur l'en-tête d'un niveau
 - Mise en forme : tableau, carte de chaleur (globale, par ligne, par colonne) ou barres de données
 - Nombres au format de la colonne dans Grist (devise, pourcentage, décimales, séparateurs)
 - Densité (compacte, standard, aérée) et taille du texte
@@ -34,9 +34,9 @@ Les réglages sont enregistrés automatiquement dans le widget.
 
 **Configuration** (bouton « Ouvrir la configuration » de Grist)
 - Champs typés (texte, nombre, date) avec recherche
-- Regroupement des dates par année, trimestre ou mois
-- Calculs : nombre, somme, moyenne, moyenne pondérée, médiane, min/max, écart-type, répartitions en %…
-- Filtres de valeurs avec recherche, « tout cocher », « seulement », et nombre d'occurrences
+- Regroupement des dates par année, trimestre ou mois (dérivateurs de pivottable)
+- Calculs de pivottable : nombre, somme, moyenne, moyenne pondérée, médiane, min/max, écart-type, répartitions en % (du total, de la ligne, de la colonne ou du groupe parent)…
+- Filtres de valeurs de pivotUI avec recherche, « tout cocher / tout décocher » et nombre d'occurrences
 - Tri des lignes et colonnes (libellé ou valeur), totaux activables
 - Thème clair/sombre synchronisé avec Grist
 - « Annuler » pour revenir à l'état d'ouverture de la configuration
@@ -57,10 +57,10 @@ Organisation du code :
 
 | Fichier | Rôle |
 | --- | --- |
-| `index.js` | État, liaison avec Grist, rendu, détail, export |
-| `config.js` | Panneau de configuration |
-| `render.js` | Calcul pivottable, construction du tableau, sous-totaux, mise en forme |
+| `index.js` | Réglages, construction de pivotUI, liaison avec Grist, détail, export |
+| `config.js` | Place et habille les éléments de pivotUI dans le panneau de configuration |
+| `render.js` | Rendus subtotal.js (tableau, chaleur, barres) et mise en forme du tableau |
 | `gristColumns.js` | Formats et libellés des colonnes Grist (logique de formatage de Grist) |
-| `data.js` | Préparation des données Grist (types, dates, valeurs vides, tri) |
-| `aggregators.js` | Catalogue des calculs |
+| `data.js` | Préparation des données Grist (types, valeurs, dérivés de dates, tris) |
+| `aggregators.js` | Catalogue des calculs transmis à pivotUI |
 | `ui.js`, `icons.js` | Popovers, menus, notifications, icônes |

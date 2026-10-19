@@ -1,10 +1,12 @@
 /**
- * Catalogue des calculs (agrégateurs) proposés et libellés lisibles.
+ * Catalogue des calculs (agrégateurs) proposés à pivotUI et libellés lisibles.
  * Les clés restent celles de la locale française de pivottable pour rester compatible
  * avec les configurations déjà enregistrées dans Grist.
  */
 const TCDAggregators = (function () {
   const tpl = $.pivotUtilities.aggregatorTemplates;
+  const subTpl = $.pivotUtilities.subtotalAggregatorTemplates;
+  const frPct = $.pivotUtilities.numberFormat({ digitsAfterDecimal: 1, scaler: 100, suffix: ' %', thousandsSep: ' ', decimalSep: ',' });
   const frFmt = $.pivotUtilities.numberFormat({ thousandsSep: ' ', decimalSep: ',' });
 
   function wavg(n) {
@@ -28,6 +30,11 @@ const TCDAggregators = (function () {
     'Médiane': tpl.median(frFmt),
     'Variance': tpl.var(1, frFmt),
     'Écart-type': tpl.stdev(1, frFmt),
+    // Proportions relatives au groupe parent : fournies par subtotal.js
+    'Somme en proportion du groupe (lignes)': subTpl.fractionOf(tpl.sum(), 'row', frPct),
+    'Somme en proportion du groupe (colonnes)': subTpl.fractionOf(tpl.sum(), 'col', frPct),
+    'Nombre en proportion du groupe (lignes)': subTpl.fractionOf(tpl.count(), 'row', frPct),
+    'Nombre en proportion du groupe (colonnes)': subTpl.fractionOf(tpl.count(), 'col', frPct),
   });
 
   const GROUPS = [
@@ -36,6 +43,8 @@ const TCDAggregators = (function () {
     ['Répartition en %', [
       'Somme en proportion du totale', 'Somme en proportion de la ligne', 'Somme en proportion de la colonne',
       'Nombre en proportion du totale', 'Nombre en proportion de la ligne', 'Nombre en proportion de la colonne',
+      'Somme en proportion du groupe (lignes)', 'Somme en proportion du groupe (colonnes)',
+      'Nombre en proportion du groupe (lignes)', 'Nombre en proportion du groupe (colonnes)',
     ]],
   ];
 
@@ -48,6 +57,10 @@ const TCDAggregators = (function () {
     'Nombre en proportion du totale': 'Nombre en % du total',
     'Nombre en proportion de la ligne': 'Nombre en % de la ligne',
     'Nombre en proportion de la colonne': 'Nombre en % de la colonne',
+    'Somme en proportion du groupe (lignes)': 'Somme en % du groupe (lignes)',
+    'Somme en proportion du groupe (colonnes)': 'Somme en % du groupe (colonnes)',
+    'Nombre en proportion du groupe (lignes)': 'Nombre en % du groupe (lignes)',
+    'Nombre en proportion du groupe (colonnes)': 'Nombre en % du groupe (colonnes)',
   };
 
   const INPUT_LABELS = {
@@ -107,28 +120,35 @@ const TCDAggregators = (function () {
     'Minimum', 'Maximum', 'Premier', 'Dernier', 'Écart-type']);
 
   /**
-   * Construit l'agrégateur pivottable. Les nombres sont affichés au format de la colonne Grist
-   * (devise, pourcentage, décimales…) ou, à défaut, au format par défaut de Grist.
+   * Agrégateurs transmis à pivotUI : ceux de la librairie, avec le format de nombre de la colonne Grist
+   * (devise, pourcentage, décimales…) ou, à défaut, le format par défaut de Grist.
+   * @param {(name: string) => string} colIdOf - nom de champ affiché → identifiant de colonne Grist
    */
-  function build(name, vals) {
-    const base = catalogue[name](vals);
-    const k = kind(name);
-    if (k === 'percent' || k === 'list') { return base; }
-    const formatter = TCDGrist.formatter(KEEPS_COLUMN_FORMAT.has(name) ? vals[0] : null);
-    return (data, rowKey, colKey) => {
-      const agg = base(data, rowKey, colKey);
-      agg.format = formatter;
-      return agg;
-    };
+  function forUI(colIdOf) {
+    const out = {};
+    for (const name of Object.keys(catalogue)) {
+      const k = kind(name);
+      out[name] = vals => {
+        const base = catalogue[name](vals);
+        if (k === 'percent' || k === 'list') { return base; }
+        const formatter = TCDGrist.formatter(KEEPS_COLUMN_FORMAT.has(name) && vals && vals[0] ? colIdOf(vals[0]) : null);
+        return (data, rowKey, colKey) => {
+          const agg = base(data, rowKey, colKey);
+          agg.format = formatter;
+          return agg;
+        };
+      };
+    }
+    return out;
   }
 
   /** Description lisible du calcul, ex. « Somme de Montant » */
   function describe(name, vals) {
-    const L = TCDData.label;
+    const L = x => x;
     const v = (vals || []).filter(Boolean);
     const label = LABELS[name] || name;
     if (name === 'Nombre') { return 'Nombre de lignes'; }
-    if (name === 'Nombre en proportion du totale' || name === 'Nombre en proportion de la ligne' || name === 'Nombre en proportion de la colonne') {
+    if (/^Nombre en proportion/.test(name)) {
       return label;
     }
     if (!v.length) { return label; }
@@ -138,5 +158,5 @@ const TCDAggregators = (function () {
     return `${label} de ${L(v[0])}`;
   }
 
-  return { catalogue, GROUPS, LABELS, normalizeName, numInputs, inputLabels, kind, build, describe };
+  return { catalogue, GROUPS, LABELS, normalizeName, numInputs, inputLabels, kind, forUI, describe };
 })();

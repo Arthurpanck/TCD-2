@@ -11,6 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui-touch-punch/0.2.3/jquery.ui.touch-punch.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.fr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/subtotal/1.11.0-alpha.0/subtotal.min.js"></script>
   </head>
   <body>
     <div id="app">
@@ -35,7 +36,7 @@
               <span id="field-count" class="muted"></span>
             </div>
             <input type="search" id="field-search" class="input" placeholder="Rechercher un champ…" autocomplete="off">
-            <ul id="zone-unused" class="zone zone-unused" data-zone="unused" data-placeholder="Tous les champs sont utilisés"></ul>
+            <div id="slot-unused" class="slot"></div>
             <p class="hint">Glissez un champ vers <b>Lignes</b> ou <b>Colonnes</b>, ou cliquez dessus.</p>
           </section>
 
@@ -44,25 +45,22 @@
               <h3><span class="zone-dot dot-rows"></span>Lignes</h3>
               <button type="button" id="swap-axes" class="icon-btn sm" title="Inverser lignes et colonnes"></button>
             </div>
-            <ul id="zone-rows" class="zone zone-rows" data-zone="rows" data-placeholder="Déposez un champ ici"></ul>
+            <div id="slot-rows" class="slot"></div>
           </section>
 
           <section class="cfg-section">
             <div class="cfg-section-head">
               <h3><span class="zone-dot dot-cols"></span>Colonnes</h3>
             </div>
-            <ul id="zone-cols" class="zone zone-cols" data-zone="cols" data-placeholder="Déposez un champ ici"></ul>
+            <div id="slot-cols" class="slot"></div>
           </section>
 
           <section class="cfg-section">
             <div class="cfg-section-head">
               <h3><span class="zone-dot dot-vals"></span>Valeurs</h3>
             </div>
-            <label class="field">
-              <span class="field-label">Calcul</span>
-              <select id="agg-select" class="input"></select>
-            </label>
-            <div id="val-inputs"></div>
+            <span class="field-label">Calcul</span>
+            <div id="slot-vals" class="slot-vals"></div>
             <p class="hint" id="format-hint"></p>
           </section>
 
@@ -93,20 +91,20 @@
               </select>
             </label>
             <div class="field-row">
-              <label class="field">
+              <div class="field">
                 <span class="field-label">Tri des lignes</span>
-                <select id="row-order" class="input order-select"></select>
-              </label>
-              <label class="field">
+                <span id="slot-row-order"></span>
+              </div>
+              <div class="field">
                 <span class="field-label">Tri des colonnes</span>
-                <select id="col-order" class="input order-select"></select>
-              </label>
+                <span id="slot-col-order"></span>
+              </div>
             </div>
             <div class="field">
               <span class="field-label">Totaux</span>
               <label class="switch"><input type="checkbox" id="row-totals"><span></span>Total par ligne</label>
               <label class="switch"><input type="checkbox" id="col-totals"><span></span>Total par colonne</label>
-              <label class="switch"><input type="checkbox" id="subtotals"><span></span>Sous-totaux par groupe</label>
+              <label class="switch"><input type="checkbox" id="subtotals"><span></span>Sous-totaux par groupe (repliables)</label>
             </div>
             <div class="field">
               <span class="field-label">Clic sur une case</span>
@@ -123,6 +121,7 @@
             </div>
           </details>
 
+          <div id="slot-renderer" hidden></div>
         </div>
       </aside>
 
@@ -155,6 +154,7 @@
         <p class="drawer-foot hint">Ces lignes sont aussi transmises aux widgets Grist liés à ce tableau (« Sélectionner par »). Échap pour fermer, Échap encore pour désélectionner.</p>
       </aside>
 
+      <div id="filter-layer"></div>
       <div id="popover" class="popover" hidden></div>
       <div id="tooltip" class="tooltip" hidden></div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

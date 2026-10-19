@@ -1,81 +1,53 @@
 /**
- * Panneau de configuration : champs, zones Lignes/Colonnes (glisser-déposer ou clic),
- * calcul, filtres, affichage et format des nombres.
- * Communique avec l'application via l'objet `app` fourni à init().
+ * Panneau de configuration bâti sur pivotUI.
+ * pivotUI garde toute la logique (glisser-déposer, filtres, calcul, tri, rendu) ;
+ * ce module place ses éléments dans le panneau et les habille : puces typées, menus,
+ * fenêtres de filtre positionnées, libellés des calculs et des tris.
+ * Les éléments déplacés restent dans l'hôte de pivotUI, qui les retrouve par leurs classes.
  */
 const TCDConfig = (function () {
   const { el } = UI;
-  const { label } = TCDData;
   const $id = id => document.getElementById(id);
   let app = null;
+  let $host = null;
   let dragging = false;
+  let pendingAnchor = null;
 
-  const ORDERS = [
-    ['key_a_to_z', 'Par libellé (A → Z)'],
-    ['value_z_to_a', 'Par valeur décroissante'],
-    ['value_a_to_z', 'Par valeur croissante'],
-  ];
+  const ORDER_LABELS = {
+    key_a_to_z: 'Libellé A → Z',
+    value_a_to_z: 'Valeur croissante',
+    value_z_to_a: 'Valeur décroissante',
+  };
 
   function init(api) {
     app = api;
-
-    const agg = $id('agg-select');
-    for (const [group, names] of TCDAggregators.GROUPS) {
-      const og = el('optgroup', { label: group });
-      for (const name of names) { og.append(el('option', { value: name }, TCDAggregators.LABELS[name] || name)); }
-      agg.append(og);
-    }
-    agg.addEventListener('change', () => {
-      const name = agg.value;
-      app.update({ aggregatorName: name, vals: fitVals(app.settings().vals, TCDAggregators.numInputs(name)) });
-    });
-
-    document.querySelectorAll('.order-select').forEach(sel => {
-      for (const [v, l] of ORDERS) { sel.append(el('option', { value: v }, l)); }
-    });
-    $id('row-order').addEventListener('change', e => app.update({ rowOrder: e.target.value }));
-    $id('col-order').addEventListener('change', e => app.update({ colOrder: e.target.value }));
     $id('row-totals').addEventListener('change', e => app.update({ rowTotals: e.target.checked }));
     $id('col-totals').addEventListener('change', e => app.update({ colTotals: e.target.checked }));
     $id('subtotals').addEventListener('change', e => app.update({ subtotals: e.target.checked }));
     $id('click-detail').addEventListener('change', e => app.update({ clickDetail: e.target.checked }));
-    $id('heat-scope').addEventListener('change', e => app.update({ rendererName: rendererName('heat', e.target.value) }));
-
-    segmented($id('renderer-seg'), v => app.update({ rendererName: rendererName(v, $id('heat-scope').value) }));
+    $id('heat-scope').addEventListener('change', e => setRenderer(rendererName('heat', e.target.value)));
+    segmented($id('renderer-seg'), v => setRenderer(rendererName(v, $id('heat-scope').value)));
     segmented($id('density-seg'), v => app.update({ density: v }));
 
     $id('swap-axes').innerHTML = Icons.svg('swap', 15);
-    $id('swap-axes').addEventListener('click', () => {
-      const s = app.settings();
-      app.update({ rows: s.cols, cols: s.rows, rowOrder: s.colOrder, colOrder: s.rowOrder });
+    $id('swap-axes').addEventListener('click', swapAxes);
+    $id('clear-filters').addEventListener('click', () => {
+      $('#filter-layer input.pvtFilter').prop('checked', true);
+      $host.find('.pvtFilteredAttribute').removeClass('pvtFilteredAttribute');
+      app.refreshPivot();
     });
-    $id('clear-filters').addEventListener('click', () => app.update({ exclusions: {} }));
     $id('field-search').addEventListener('input', filterFieldList);
     $id('cfg-done').addEventListener('click', () => app.closeConfig());
     $id('cfg-revert').addEventListener('click', () => app.revert());
 
-    $('#zone-unused, #zone-rows, #zone-cols').sortable({
-      connectWith: '.zone',
-      items: '> li.chip',
-      placeholder: 'chip-placeholder',
-      tolerance: 'pointer',
-      distance: 4,
-      cursor: 'grabbing',
-      start(_e, ui) {
-        dragging = true;
-        document.body.classList.add('is-dragging');
-        ui.placeholder.css({ width: ui.item.outerWidth(), height: ui.item.outerHeight() });
-        UI.closePopover();
-      },
-      over() { $(this).addClass('is-over'); },
-      out() { $(this).removeClass('is-over'); },
-      stop() {
-        dragging = false;
-        document.body.classList.remove('is-dragging');
-        $('.zone').removeClass('is-over');
-        readZones();
-      },
+    // Fenêtres de filtre : fermeture par Échap ou clic à l'extérieur (équivaut à « Annuler »)
+    document.addEventListener('mousedown', e => {
+      if (e.target.closest('.pvtFilterBox, .pvtTriangle, .filter-pill, .sum-filters, .popover')) { return; }
+      closeFilterBoxes();
     });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && openBox()) { e.stopImmediatePropagation(); closeFilterBoxes(); }
+    }, true);
   }
 
   function segmented(root, onPick) {
@@ -93,7 +65,7 @@ const TCDConfig = (function () {
     });
   }
 
-  /** Nom pivottable (français) du rendu, conservé pour la compatibilité des réglages */
+  /** Nom pivottable (français) du rendu */
   function rendererName(kind, scope) {
     if (kind === 'heat') {
       return { row: 'Carte de chaleur par ligne', col: 'Carte de chaleur par colonne' }[scope] || 'Carte de chaleur';
@@ -101,197 +73,215 @@ const TCDConfig = (function () {
     return kind === 'bars' ? 'Table avec barres' : 'Table';
   }
 
-  function fitVals(vals, n) {
-    const fields = app.fields();
-    const numeric = fields.filter(f => f.type === 'number').map(f => f.name);
-    const out = (vals || []).slice(0, n);
-    while (out.length < n) {
-      out.push(numeric.find(f => !out.includes(f)) || numeric[0] || (fields[0] && fields[0].name));
-    }
-    return out;
+  /** Choisit le rendu dans la liste de pivotUI, qui recalcule le tableau */
+  function setRenderer(name) {
+    $host.find('select.pvtRenderer').val(name).trigger('change');
   }
 
-  function readZones() {
-    const read = id => $(`#${id} > li.chip`).map((_i, li) => li.dataset.attr).get();
-    const rows = read('zone-rows'), cols = read('zone-cols');
-    const s = app.settings();
-    if (rows.join('\0') !== s.rows.join('\0') || cols.join('\0') !== s.cols.join('\0')) {
-      app.update({ rows, cols });
-    } else {
-      refresh();
-    }
+  // ---------------------------------------------------------------------------
+  // Mise en place des éléments de pivotUI (après chaque construction)
+  // ---------------------------------------------------------------------------
+
+  /** @param {jQuery} host - élément sur lequel pivotUI a été appelé */
+  function adopt(host) {
+    $host = host;
+    const ui = host.children('table.pvtUi');
+    const unused = ui.find('td.pvtUnused');
+
+    // Chaque fenêtre de filtre suit la puce du même rang (classe axis_N)
+    unused.children('.pvtFilterBox').each((i, box) => { box.dataset.axis = i; decorateFilterBox(box); });
+    $('#filter-layer').append(unused.children('.pvtFilterBox'));
+
+    $('#slot-unused').append(unused.removeClass('pvtVertList pvtHorizList'));
+    $('#slot-rows').append(ui.find('td.pvtRows'));
+    $('#slot-cols').append(ui.find('td.pvtCols').removeClass('pvtHorizList'));
+    $('#slot-row-order').append(ui.find('a.pvtRowOrder').addClass('btn order-btn'));
+    $('#slot-col-order').append(ui.find('a.pvtColOrder').addClass('btn order-btn'));
+    $('#slot-vals').append(ui.find('td.pvtVals'));
+    $('#slot-renderer').append(ui.find('select.pvtRenderer').closest('td'));
+    $('#output').append(ui.find('td.pvtRendererArea'));
+    ui.remove();
+
+    host.find('td.pvtVals br').remove();
+    groupAggregators(host.find('select.pvtAggregator'));
+
+    const fields = new Map(app.fields().map(f => [f.name, f]));
+    host.find('.pvtAxisContainer li').each((_i, li) => decorateChip(li, fields));
+    // Champs disponibles dans l'ordre des colonnes, chaque date suivie de ses regroupements
+    const order = app.fields().map(f => f.name);
+    unused.children('li').sort((a, b) => order.indexOf(attrOf(a)) - order.indexOf(attrOf(b))).appendTo(unused);
+    $id('field-count').textContent = `${app.fields().filter(f => !f.parent).length} champs`;
+
+    host.find('.pvtAxisContainer').on('sortstart', (_e, ui2) => {
+      dragging = true;
+      document.body.classList.add('is-dragging');
+      ui2.placeholder.css({ width: ui2.item.outerWidth(), height: ui2.item.outerHeight() });
+      UI.closePopover();
+      closeFilterBoxes();
+    }).on('sortstop', () => {
+      document.body.classList.remove('is-dragging');
+      setTimeout(() => { dragging = false; }, 0);
+    }).sortable('option', { tolerance: 'pointer', distance: 4, cursor: 'grabbing' });
+    filterFieldList();
   }
 
-  function moveTo(attr, zone) {
-    const s = app.settings();
-    const rows = s.rows.filter(a => a !== attr), cols = s.cols.filter(a => a !== attr);
-    if (zone === 'rows') { rows.push(attr); }
-    if (zone === 'cols') { cols.push(attr); }
-    app.update({ rows, cols });
+  const attrOf = li => $(li).children('span.pvtAttr').data('attrName');
+  const liOf = attr => $host.find('.pvtAxisContainer li').filter((_i, li) => attrOf(li) === attr);
+  const axisOf = li => [...li.classList].find(c => c.startsWith('axis_')).slice(5);
+  const boxOf = li => document.querySelector(`#filter-layer .pvtFilterBox[data-axis="${axisOf(li)}"]`);
+
+  /** Liste des calculs regroupée par famille, avec des libellés lisibles (la valeur reste la clé pivottable) */
+  function groupAggregators(select) {
+    const current = select.val();
+    const known = new Set(select.children('option').map((_i, o) => o.value).get());
+    const groups = TCDAggregators.GROUPS.map(([label, names]) => {
+      const og = el('optgroup', { label });
+      names.filter(n => known.has(n)).forEach(n => { og.append(el('option', { value: n }, TCDAggregators.LABELS[n] || n)); known.delete(n); });
+      return og;
+    });
+    const others = el('optgroup', { label: 'Autres' }, [...known].map(n => el('option', { value: n }, TCDAggregators.LABELS[n] || n)));
+    select.empty().append(groups, known.size ? others : []).val(current).addClass('input');
   }
 
   function typeBadge(field) {
-    if (field.type === 'number') { return el('span', { class: 'ft ft-number', title: 'Nombre' }, '#'); }
-    if (field.type === 'date') { return el('span', { class: 'ft ft-date', title: 'Date', html: Icons.svg('calendar', 11) }); }
+    if (field && field.type === 'number') { return el('span', { class: 'ft ft-number', title: 'Nombre' }, '#'); }
+    if (field && field.type === 'date') { return el('span', { class: 'ft ft-date', title: 'Date', html: Icons.svg('calendar', 11) }); }
     return el('span', { class: 'ft ft-text', title: 'Texte' }, 'Aa');
   }
 
-  /** @param {boolean} compact - champ dérivé placé juste après son champ date : on n'affiche que « Année », « Mois »… */
-  function chip(field, zone, compact) {
-    const s = app.settings();
-    const excluded = (s.exclusions[field.name] || []).length;
-    const name = field.parent && compact
-      ? [el('span', { class: 'chip-parent' }, '›'), ' ', field.name.split(' › ').pop()]
-      : field.parent
-        ? [el('span', { class: 'chip-parent' }, label(field.parent) + ' ›'), ' ', field.name.split(' › ').pop()]
-        : [label(field.name)];
-    const li = el('li', {
-      class: `chip chip-${zone}` + (field.parent ? ' is-derived' : ''),
-      tabindex: 0, role: 'button', 'aria-haspopup': 'true',
-      dataset: { attr: field.name },
-      title: field.parent ? `${label(field.parent)} regroupé par ${field.name.split(' › ').pop().toLowerCase()}` : label(field.name),
-    }, typeBadge(field), el('span', { class: 'chip-label' }, ...name));
-
-    if (excluded) {
-      li.append(el('button', {
-        type: 'button', class: 'chip-btn chip-filter is-active',
-        title: `Filtre actif : ${excluded} valeur(s) masquée(s)`,
-        html: Icons.svg('filter', 12) + `<span>${excluded}</span>`,
-        onclick: e => { e.stopPropagation(); openFilter(field.name, li); },
-      }));
-    }
-    if (zone !== 'unused') {
-      li.append(el('button', {
-        type: 'button', class: 'chip-btn chip-remove', title: 'Retirer', 'aria-label': `Retirer ${label(field.name)}`,
-        html: Icons.svg('x', 12),
-        onclick: e => { e.stopPropagation(); moveTo(field.name, 'unused'); },
-      }));
-    }
-    li.addEventListener('click', () => { if (!dragging) { openChipMenu(field.name, zone, li); } });
-    li.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openChipMenu(field.name, zone, li); }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && zone !== 'unused') { moveTo(field.name, 'unused'); }
+  function decorateChip(li, fields) {
+    const attr = attrOf(li);
+    const field = fields.get(attr);
+    li.classList.add('chip');
+    li.dataset.attr = attr;
+    if (field && field.parent) { li.classList.add('is-derived'); }
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.title = field && field.parent ? `${field.parent} regroupé par ${attr.split(' › ').pop().toLowerCase()}` : attr;
+    li.prepend(typeBadge(field));
+    const triangle = li.querySelector('.pvtTriangle');
+    triangle.innerHTML = Icons.svg('filter', 12);
+    triangle.title = 'Filtrer les valeurs';
+    triangle.addEventListener('click', placeFilterBox);
+    li.append(el('button', {
+      type: 'button', class: 'chip-btn chip-remove', title: 'Retirer', 'aria-label': `Retirer ${attr}`, html: Icons.svg('x', 12),
+      onclick: e => { e.stopPropagation(); moveTo(attr, 'unused'); },
+    }));
+    li.addEventListener('click', e => {
+      if (dragging || e.target.closest('.pvtTriangle, .chip-btn')) { return; }
+      openChipMenu(attr, li);
     });
-    return li;
+    li.addEventListener('keydown', e => {
+      if (e.target !== li) { return; }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openChipMenu(attr, li); }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && zoneOf(li) !== 'unused') { moveTo(attr, 'unused'); }
+    });
   }
 
-  function openChipMenu(attr, zone, anchor) {
+  function zoneOf(li) {
+    const td = li.closest('.pvtAxisContainer');
+    return td.classList.contains('pvtRows') ? 'rows' : td.classList.contains('pvtCols') ? 'cols' : 'unused';
+  }
+
+  /** Déplace une puce comme le ferait un glisser-déposer, puis laisse pivotUI recalculer */
+  function moveTo(attr, zone) {
+    const target = { rows: 'td.pvtRows', cols: 'td.pvtCols', unused: 'td.pvtUnused' }[zone];
+    $host.find(target).append(liOf(attr));
+    UI.closePopover();
+    filterFieldList();
+    app.refreshPivot();
+  }
+
+  function swapAxes() {
+    const rows = $host.find('td.pvtRows'), cols = $host.find('td.pvtCols');
+    const rowLis = rows.children('li'), colLis = cols.children('li');
+    rows.append(colLis);
+    cols.append(rowLis);
+    const r = $host.find('a.pvtRowOrder'), c = $host.find('a.pvtColOrder');
+    const ro = r.data('order');
+    r.data('order', c.data('order'));
+    c.data('order', ro);
+    app.refreshPivot();
+  }
+
+  function openChipMenu(attr, anchor) {
     if (UI.isOpenFor(anchor)) { UI.closePopover(); return; }
+    const zone = zoneOf(anchor);
     const items = [];
     if (zone !== 'rows') { items.push({ icon: 'rows', label: zone === 'cols' ? 'Déplacer vers les lignes' : 'Ajouter aux lignes', onClick: () => moveTo(attr, 'rows') }); }
     if (zone !== 'cols') { items.push({ icon: 'cols', label: zone === 'rows' ? 'Déplacer vers les colonnes' : 'Ajouter aux colonnes', onClick: () => moveTo(attr, 'cols') }); }
     items.push({ icon: 'filter', label: 'Filtrer les valeurs…', onClick: () => openFilter(attr, anchor) });
     if (zone !== 'unused') { items.push('sep', { icon: 'x', label: 'Retirer du tableau', danger: true, onClick: () => moveTo(attr, 'unused') }); }
-    UI.openPopover(anchor, UI.menu(items, label(attr)));
+    UI.openPopover(anchor, UI.menu(items, attr));
   }
 
-  /** Fenêtre de filtre façon tableur : recherche, tout/aucun, « seulement », comptes */
+  // ---------------------------------------------------------------------------
+  // Fenêtres de filtre de pivotUI
+  // ---------------------------------------------------------------------------
+
+  function decorateFilterBox(box) {
+    box.classList.add('filter-pop');
+    box.querySelectorAll('input.pvtSearch').forEach(i => { i.type = 'search'; i.classList.add('input'); });
+    box.querySelectorAll('p:not(:last-child) button').forEach(b => b.classList.add('link-btn'));
+    const final = box.querySelectorAll(':scope > p:last-child button');
+    final.forEach((b, i) => b.classList.add('btn', i === 0 && final.length > 1 ? 'btn-primary' : 'btn-ghost'));
+    box.querySelectorAll('span.count').forEach(s => { s.textContent = s.textContent.replace(/[()]/g, ''); });
+  }
+
+  const openBox = () => [...document.querySelectorAll('#filter-layer .pvtFilterBox')].find(b => b.style.display !== 'none');
+
+  function closeFilterBoxes() {
+    const box = openBox();
+    if (box) { $(box).children('p').last().find('button').last().trigger('click'); }
+  }
+
+  /** Ouvre la fenêtre de filtre de pivotUI d'un champ, près de l'élément `anchor` */
   function openFilter(attr, anchor) {
-    const ds = app.dataset();
-    const sorter = TCDData.makeSorters(ds.sortKeys)(attr);
-    const counts = TCDData.valueCounts(ds.records, attr, sorter);
-    const excluded = new Set((app.settings().exclusions[attr] || []).map(String));
-    const LIMIT = 500;
+    UI.closePopover();
+    const li = liOf(attr);
+    if (!li.length) { return; }
+    closeFilterBoxes();
+    pendingAnchor = anchor || null;
+    li.find('.pvtTriangle').trigger('click');
+  }
 
-    const search = el('input', { type: 'search', class: 'input', placeholder: 'Rechercher une valeur…' });
-    const list = el('div', { class: 'fp-list' });
-    const status = el('span', { class: 'muted' });
-    const apply = el('button', { type: 'button', class: 'btn btn-primary' }, 'Appliquer');
+  /** Repositionne la fenêtre ouverte par pivotUI (après son propre gestionnaire de clic) */
+  function placeFilterBox(e) {
+    const box = boxOf(e.currentTarget.closest('li'));
+    const visible = el => el && el.isConnected && el.getClientRects().length > 0;
+    const anchor = visible(pendingAnchor) ? pendingAnchor : e.currentTarget;
+    pendingAnchor = null;
+    document.querySelectorAll('#filter-layer .pvtFilterBox').forEach(b => { if (b !== box) { b.style.display = 'none'; } });
+    const r = anchor.getBoundingClientRect();
+    const w = box.offsetWidth, h = box.offsetHeight;
+    box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    box.style.top = (r.bottom + 6 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+    const search = box.querySelector('input.pvtSearch');
+    if (search) { search.focus({ preventScroll: true }); }
+  }
 
-    const visible = () => {
-      const q = search.value.trim().toLocaleLowerCase('fr');
-      return q ? counts.filter(([v]) => String(v).toLocaleLowerCase('fr').includes(q)) : counts;
-    };
-    const updateStatus = () => {
-      const shown = counts.length - counts.filter(([v]) => excluded.has(String(v))).length;
-      status.textContent = `${shown} / ${counts.length} sélectionnée(s)`;
-      apply.disabled = shown === 0;
-    };
-    const draw = () => {
-      const items = visible();
-      list.replaceChildren(...items.slice(0, LIMIT).map(([value, n]) => {
-        const key = String(value);
-        const cb = el('input', { type: 'checkbox' });
-        cb.checked = !excluded.has(key);
-        cb.addEventListener('change', () => { cb.checked ? excluded.delete(key) : excluded.add(key); updateStatus(); });
-        const only = el('button', {
-          type: 'button', class: 'fp-only', title: 'Ne garder que cette valeur',
-          onclick: e => {
-            e.preventDefault();
-            counts.forEach(([v]) => excluded.add(String(v)));
-            excluded.delete(key);
-            draw();
-          },
-        }, 'seulement');
-        return el('label', { class: 'fp-item' + (value === TCDData.EMPTY ? ' is-empty' : '') },
-          cb, el('span', { class: 'fp-value' }, key), only, el('span', { class: 'fp-count' }, n.toLocaleString('fr-FR')));
-      }));
-      if (items.length > LIMIT) {
-        list.append(el('div', { class: 'fp-more' }, `… et ${items.length - LIMIT} autres valeurs : affinez la recherche.`));
-      }
-      if (!items.length) { list.append(el('div', { class: 'fp-more' }, 'Aucune valeur ne correspond.')); }
-      updateStatus();
-    };
-    search.addEventListener('input', draw);
-
-    const bulk = (keep) => () => { visible().forEach(([v]) => (keep ? excluded.delete(String(v)) : excluded.add(String(v)))); draw(); };
-    apply.addEventListener('click', () => {
-      const ex = { ...app.settings().exclusions };
-      if (excluded.size) { ex[attr] = [...excluded]; } else { delete ex[attr]; }
-      UI.closePopover();
-      app.update({ exclusions: ex });
-    });
-
-    const root = el('div', { class: 'filter-pop' },
-      el('div', { class: 'fp-head' }, el('strong', {}, label(attr)), status),
-      search,
-      el('div', { class: 'fp-bulk' },
-        el('button', { type: 'button', class: 'link-btn', onclick: bulk(true) }, 'Tout cocher'),
-        el('button', { type: 'button', class: 'link-btn', onclick: bulk(false) }, 'Tout décocher')),
-      list,
-      el('div', { class: 'fp-foot' },
-        el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => UI.closePopover() }, 'Annuler'),
-        apply));
-    draw();
-    UI.openPopover(anchor, root, { className: 'is-filter' });
+  function clearFilter(attr) {
+    const li = liOf(attr);
+    if (!li.length) { return; }
+    $(boxOf(li[0])).find('input.pvtFilter').prop('checked', true);
+    li.removeClass('pvtFilteredAttribute');
+    app.refreshPivot();
   }
 
   function filterFieldList() {
     const q = $id('field-search').value.trim().toLocaleLowerCase('fr');
-    document.querySelectorAll('#zone-unused > li.chip').forEach(li => {
-      li.hidden = q && !label(li.dataset.attr).toLocaleLowerCase('fr').includes(q);
+    document.querySelectorAll('#slot-unused li.chip').forEach(li => {
+      li.hidden = q && !String(attrOf(li)).toLocaleLowerCase('fr').includes(q);
     });
+    document.querySelectorAll('#slot-rows li.chip, #slot-cols li.chip').forEach(li => { li.hidden = false; });
   }
 
-  function renderValInputs(s) {
-    const box = $id('val-inputs');
-    const labels = TCDAggregators.inputLabels(s.aggregatorName);
-    const fields = app.fields();
-    const numeric = fields.filter(f => f.type === 'number');
-    const others = fields.filter(f => f.type !== 'number');
-    box.replaceChildren(...labels.map((lab, i) => {
-      const sel = el('select', { class: 'input' },
-        numeric.length ? el('optgroup', { label: 'Champs numériques' }, numeric.map(f => el('option', { value: f.name }, label(f.name)))) : null,
-        others.length ? el('optgroup', { label: 'Autres champs' }, others.map(f => el('option', { value: f.name }, label(f.name)))) : null);
-      sel.value = s.vals[i] || '';
-      sel.addEventListener('change', () => {
-        const vals = s.vals.slice();
-        vals[i] = sel.value;
-        app.update({ vals });
-      });
-      return el('label', { class: 'field' }, el('span', { class: 'field-label' }, lab), sel);
-    }));
-  }
-
-  function renderActiveFilters(s) {
-    const box = $id('active-filters');
-    const entries = Object.entries(s.exclusions).filter(([, v]) => v && v.length);
-    $id('filters-section').hidden = !entries.length;
-    box.replaceChildren(...entries.map(([attr, values]) => filterPill(attr, values, false)));
-  }
+  // ---------------------------------------------------------------------------
+  // Synchronisation après chaque calcul de pivotUI
+  // ---------------------------------------------------------------------------
 
   /** Pastille de filtre actif (réutilisée dans la barre de consultation) */
-  function filterPill(attr, values, compact) {
+  function filterPill(attr, count, compact) {
     const pill = el('span', { class: 'filter-pill' + (compact ? ' is-compact' : '') });
     const open = el('button', {
       type: 'button', class: 'filter-pill-main', title: 'Modifier le filtre',
@@ -299,44 +289,53 @@ const TCDConfig = (function () {
       // Dans une popover, la pastille disparaît à l'ouverture du filtre : on ancre sur le bouton de résumé
       onclick: () => openFilter(attr, compact ? (document.querySelector('.sum-filters') || pill) : pill),
     });
-    open.querySelector('span').textContent = `${label(attr)} · ${values.length} masquée${values.length > 1 ? 's' : ''}`;
+    open.querySelector('span').textContent = `${attr} · ${count} masquée${count > 1 ? 's' : ''}`;
     const clear = el('button', {
       type: 'button', class: 'filter-pill-clear', title: 'Supprimer ce filtre', html: Icons.svg('x', 12),
-      onclick: () => { const ex = { ...app.settings().exclusions }; delete ex[attr]; app.update({ exclusions: ex }); },
+      onclick: () => { UI.closePopover(); clearFilter(attr); },
     });
     pill.append(open, clear);
     return pill;
   }
 
-  function refresh() {
-    if (!app || dragging) { return; }
+  /** @param {Object} pvt - options courantes de pivotUI (noms de champs affichés) */
+  function sync(pvt) {
+    if (!$host) { return; }
     const s = app.settings();
-    const fields = app.fields();
-    const byName = new Map(fields.map(f => [f.name, f]));
-    const used = new Set([...s.rows, ...s.cols]);
-    const asField = name => byName.get(name) || { name, type: 'text' };
+    // Tri : libellés lisibles sur les boutons de pivotUI (un clic passe au tri suivant)
+    $host.find('a.pvtRowOrder, a.pvtColOrder').each((_i, a) => {
+      a.textContent = ORDER_LABELS[$(a).data('order')];
+      a.title = 'Cliquer pour changer de tri';
+      a.tabIndex = 0;
+    });
 
-    $id('zone-rows').replaceChildren(...s.rows.map(n => chip(asField(n), 'rows')));
-    $id('zone-cols').replaceChildren(...s.cols.map(n => chip(asField(n), 'cols')));
-    let previous = null;
-    $id('zone-unused').replaceChildren(...fields.filter(f => !used.has(f.name)).map(f => {
-      const compact = f.parent && previous && (previous.name === f.parent || previous.parent === f.parent);
-      previous = f;
-      return chip(f, 'unused', compact);
-    }));
-    $id('field-count').textContent = `${fields.filter(f => !f.parent).length} champs`;
-    filterFieldList();
+    // Champs du calcul : libellés et, à défaut, premier champ numérique
+    const labels = TCDAggregators.inputLabels(pvt.aggregatorName);
+    const numeric = app.fields().filter(f => f.type === 'number').map(f => f.name);
+    let filled = false;
+    $host.find('td.pvtVals .field-label').remove();
+    $host.find('select.pvtAttrDropdown').each((i, sel) => {
+      sel.classList.add('input');
+      sel.before(el('span', { class: 'field-label' }, labels[i] || 'Champ'));
+      if (!sel.value && numeric.length) {
+        sel.value = numeric.find(n => !pvt.vals.includes(n)) || numeric[0];
+        filled = true;
+      }
+    });
+    if (filled) { app.refreshPivot(); }
 
-    $id('agg-select').value = s.aggregatorName;
-    renderValInputs(s);
-    renderActiveFilters(s);
+    const entries = Object.entries(pvt.exclusions || {}).filter(([, v]) => v && v.length);
+    $id('filters-section').hidden = !entries.length;
+    $id('active-filters').replaceChildren(...entries.map(([attr, v]) => filterPill(attr, v.length, false)));
+    $host.find('.pvtAxisContainer li').each((_i, li) => {
+      const ex = (pvt.exclusions || {})[attrOf(li)];
+      li.querySelector('.pvtTriangle').dataset.count = ex && ex.length ? ex.length : '';
+    });
 
-    const r = app.rendererOf(s.rendererName);
+    const r = app.rendererOf(pvt.rendererName);
     setSegmented($id('renderer-seg'), r.kind);
     $id('heat-scope-field').hidden = r.kind !== 'heat';
     $id('heat-scope').value = r.scope;
-    $id('row-order').value = s.rowOrder;
-    $id('col-order').value = s.colOrder;
     $id('row-totals').checked = s.rowTotals;
     $id('col-totals').checked = s.colTotals;
     $id('subtotals').checked = s.subtotals;
@@ -347,5 +346,5 @@ const TCDConfig = (function () {
       : "Les nombres s'affichent au format par défaut de Grist. Pour reprendre le format de la colonne (devise, %, décimales), donnez au widget l'accès complet au document.";
   }
 
-  return { init, refresh, openFilter, filterPill, rendererName };
+  return { init, adopt, sync, openFilter, filterPill, rendererName, setRenderer, closeFilters: closeFilterBoxes };
 })();
