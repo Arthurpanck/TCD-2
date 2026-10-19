@@ -119,6 +119,7 @@ const TCDConfig = (function () {
     if (kind === 'heat') {
       return { row: 'Carte de chaleur par ligne', col: 'Carte de chaleur par colonne' }[scope] || 'Carte de chaleur';
     }
+    if (kind === 'chart') { return 'Graphique'; }
     return kind === 'bars' ? 'Table avec barres' : 'Table';
   }
 

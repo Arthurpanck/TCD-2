@@ -21,7 +21,8 @@ Les réglages sont enregistrés automatiquement dans le widget.
 - Survol en croix (ligne et colonne) et info-bulle détaillant chaque cellule
 - Clic sur une cellule : détail des lignes sources, transmises aux widgets Grist liés (« Sélectionner par » ce widget)
 - Filtres rapides depuis la barre de résumé
-- Mise en forme : tableau, carte de chaleur (globale, par ligne, par colonne) ou barres de données
+- Sous-totaux par groupe, repliables (individuellement ou tous à la fois)
+- Mise en forme : tableau, carte de chaleur (globale, par ligne, par colonne), barres de données ou graphique (colonnes, empilées, barres, courbes)
 - Densité (compacte, standard, aérée) et taille du texte
 - Export : copie pour Excel / LibreOffice, CSV (séparateur « ; », compatible Excel français), impression
 
@@ -53,7 +54,8 @@ Organisation du code :
 | --- | --- |
 | `index.js` | État, liaison avec Grist, rendu, détail, export |
 | `config.js` | Panneau de configuration |
-| `render.js` | Calcul pivottable et mise en forme du tableau |
+| `render.js` | Calcul pivottable, construction du tableau, sous-totaux, mise en forme |
+| `chartView.js` | Vue graphique (Chart.js chargé à la demande) |
 | `data.js` | Préparation des données Grist (types, dates, valeurs vides, tri) |
 | `aggregators.js` | Catalogue des calculs et format des nombres |
 | `ui.js`, `icons.js` | Popovers, menus, notifications, icônes |

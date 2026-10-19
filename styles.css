@@ -485,6 +485,13 @@ table.pvtTable td.has-bar::after {
 }
 table.pvtTable td.has-bar.bar-neg::after { background: var(--danger); }
 
+/* Vue graphique */
+.chart-view { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 10px 14px 12px; animation: fade-in .18s ease; }
+.chart-toolbar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.chart-toolbar .segmented { flex: 0 1 auto; }
+.chart-canvas { position: relative; flex: 1; min-height: 160px; }
+.chart-note { margin-top: 6px; color: var(--text-subtle); font-size: 12px; }
+
 /* ==========================================================================
    Panneau de configuration
    ========================================================================== */

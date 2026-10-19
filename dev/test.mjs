@@ -172,6 +172,31 @@ await test('tri par valeur décroissante : les groupes restent regroupés', asyn
   await page.close();
 });
 
+await test('vue graphique : rendu, changement de type et détail au clic', async () => {
+  const page = await open({ settings: { ...base, cols: ['Statut'], rendererName: 'Graphique' } });
+  await page.waitForFunction(() => window.Chart && document.querySelector('.chart-view canvas'), null, { timeout: 15000 });
+  await page.waitForTimeout(400);
+  const n = await page.evaluate(() => Chart.getChart(document.querySelector('.chart-view canvas')).data.datasets.length);
+  assert(n === 4, 'quatre séries attendues : ' + n);
+  const pt = await page.evaluate(() => {
+    const canvas = document.querySelector('.chart-view canvas');
+    const bar = Chart.getChart(canvas).getDatasetMeta(0).data[0];
+    const r = canvas.getBoundingClientRect();
+    return { x: r.left + bar.x, y: r.top + (bar.y + bar.base) / 2 };
+  });
+  await page.mouse.click(pt.x, pt.y);
+  await page.waitForTimeout(300);
+  assert(await page.locator('#drawer').isVisible(), 'le clic sur une barre doit ouvrir le détail');
+  assert((await page.locator('#drawer-filters').textContent()).includes('Engagé'), 'critères du détail inattendus');
+  await page.keyboard.press('Escape');
+  await page.click('.chart-toolbar button:has-text("Courbes")');
+  await page.waitForTimeout(700);
+  const s = await savedSettings(page);
+  assert(s && s.chartType === 'line', 'type de graphique non enregistré');
+  assert(page.errors.length === 0, page.errors.join(' | '));
+  await page.close();
+});
+
 await test('export : la matrice reprend les totaux du tableau', async () => {
   const page = await open({ settings: base });
   const rows = await page.evaluate(() => exportMatrix());
