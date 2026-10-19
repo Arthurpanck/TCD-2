@@ -158,12 +158,15 @@ const TCDConfig = (function () {
     return el('span', { class: 'ft ft-text', title: 'Texte' }, 'Aa');
   }
 
-  function chip(field, zone) {
+  /** @param {boolean} compact - champ dérivé placé juste après son champ date : on n'affiche que « Année », « Mois »… */
+  function chip(field, zone, compact) {
     const s = app.settings();
     const excluded = (s.exclusions[field.name] || []).length;
-    const name = field.parent
-      ? [el('span', { class: 'chip-parent' }, label(field.parent) + ' ›'), ' ', field.name.split(' › ').pop()]
-      : [label(field.name)];
+    const name = field.parent && compact
+      ? [el('span', { class: 'chip-parent' }, '›'), ' ', field.name.split(' › ').pop()]
+      : field.parent
+        ? [el('span', { class: 'chip-parent' }, label(field.parent) + ' ›'), ' ', field.name.split(' › ').pop()]
+        : [label(field.name)];
     const li = el('li', {
       class: `chip chip-${zone}` + (field.parent ? ' is-derived' : ''),
       tabindex: 0, role: 'button', 'aria-haspopup': 'true',
@@ -337,7 +340,12 @@ const TCDConfig = (function () {
 
     $id('zone-rows').replaceChildren(...s.rows.map(n => chip(asField(n), 'rows')));
     $id('zone-cols').replaceChildren(...s.cols.map(n => chip(asField(n), 'cols')));
-    $id('zone-unused').replaceChildren(...fields.filter(f => !used.has(f.name)).map(f => chip(f, 'unused')));
+    let previous = null;
+    $id('zone-unused').replaceChildren(...fields.filter(f => !used.has(f.name)).map(f => {
+      const compact = f.parent && previous && (previous.name === f.parent || previous.parent === f.parent);
+      previous = f;
+      return chip(f, 'unused', compact);
+    }));
     $id('field-count').textContent = `${fields.filter(f => !f.parent).length} champs`;
     filterFieldList();
 

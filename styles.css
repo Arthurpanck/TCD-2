@@ -594,6 +594,8 @@ body.is-dragging .zone { border-color: var(--text-subtle); }
 .chip-rows { border-left: 3px solid var(--zone-rows); }
 .chip-cols { border-left: 3px solid var(--zone-cols); }
 .chip.is-derived { border-style: dashed; }
+.zone-unused .chip.is-derived { height: 24px; font-size: 12px; box-shadow: none; }
+.zone-unused .chip.is-derived .ft { min-width: 16px; height: 16px; }
 .chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-parent { color: var(--text-subtle); font-weight: 450; }
 .ft {

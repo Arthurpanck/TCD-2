@@ -226,6 +226,28 @@ await test('filtres rapides depuis la barre de résumé', async () => {
   await page.close();
 });
 
+await test('données hétérogènes : vides, booléens, listes et erreurs Grist', async () => {
+  const data = [
+    { id: 1, Nom_service: 'A', Actif: true, Tags: ['L', 'x', 'y'], Valeur: 10, Erreur: ['E', 'ZeroDivisionError'] },
+    { id: 2, Nom_service: '', Actif: false, Tags: ['L'], Valeur: null, Erreur: 1 },
+    { id: 3, Nom_service: null, Actif: null, Tags: null, Valeur: 5, Erreur: 2 },
+    { id: 4, Nom_service: 'A', Actif: true, Tags: ['L', 'x', 'y'], Valeur: 'n/a', Erreur: 3 },
+  ];
+  const page = await open({ settings: { rows: ['Nom_service', 'Actif'], cols: ['Tags'], vals: ['Valeur'], aggregatorName: 'Somme' } }, { data });
+  const labels = await page.locator('th.pvtRowLabel').allTextContents();
+  assert(labels.some(t => t.includes('(vide)')), 'valeurs vides non regroupées : ' + labels.join('|'));
+  assert(labels.some(t => t.includes('Oui')) && labels.some(t => t.includes('Non')), 'booléens non traduits');
+  const cols = await page.locator('th.pvtColLabel').allTextContents();
+  assert(cols.includes('x, y'), 'liste de choix non lisible : ' + cols.join('|'));
+  assert(await page.locator('th.pvtAxisLabel', { hasText: 'Nom service' }).count() === 1, 'libellé de champ non embelli');
+  assert(page.errors.length === 0, page.errors.join(' | '));
+  await page.evaluate(() => update({ rows: [], cols: ['Erreur'] }));
+  await page.waitForTimeout(150);
+  assert((await page.locator('th.pvtColLabel').allTextContents()).includes('#Erreur'), 'erreur de formule non signalée');
+  assert(page.errors.length === 0, page.errors.join(' | '));
+  await page.close();
+});
+
 await test('export : la matrice reprend les totaux du tableau', async () => {
   const page = await open({ settings: base });
   const rows = await page.evaluate(() => exportMatrix());

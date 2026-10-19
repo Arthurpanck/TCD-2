@@ -129,7 +129,10 @@ async function saveNow() {
   } catch (e) {
     console.error('Enregistrement impossible :', e);
     setSaveState('error');
-    UI.toast("Les modifications s'appliquent mais n'ont pas pu être enregistrées (droits d'édition requis).", 'error');
+    if (!state.saveErrorShown) {
+      state.saveErrorShown = true;
+      UI.toast("Affichage modifié pour vous seulement : l'enregistrement nécessite les droits d'édition du document.", 'error');
+    }
   } finally {
     state.savePending = false;
   }

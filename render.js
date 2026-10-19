@@ -192,7 +192,9 @@ const TCDRender = (function () {
         let span = 1;
         while (d + span < shown && hasLevel(rows[d + span], L) && groupKey(rows[d + span].key, L) === groupKey(row.key, L)) { span++; }
         const text = row.key[L];
-        const cell = th('pvtRowLabel' + (text === EMPTY ? ' is-empty' : ''), null, { rowspan: span, 'data-level': L });
+        const cell = th('pvtRowLabel' + (text === EMPTY ? ' is-empty' : ''), null, {
+          rowspan: span, 'data-level': L, title: String(text).length > 28 ? text : undefined,
+        });
         if (withSubtotals && L < n - 1) {
           cell.append(toggleButton(groupKey(row.key, L), false));
         }
