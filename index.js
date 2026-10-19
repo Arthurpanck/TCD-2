@@ -644,6 +644,9 @@ function start() {
     onEditOptions: openConfig,
   });
 
+  // Changement de thème Grist (clair/sombre) : les couleurs calculées doivent être rafraîchies
+  new MutationObserver(scheduleRender).observe(document.documentElement, { attributes: true, attributeFilter: ['data-grist-appearance'] });
+
   grist.onOptions(handleOptions);
   // Si Grist n'envoie pas d'options (widget neuf), on affiche quand même
   setTimeout(() => { if (!state.optionsLoaded) { state.optionsLoaded = true; scheduleRender(); } }, 1500);

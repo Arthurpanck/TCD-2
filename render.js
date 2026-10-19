@@ -253,6 +253,7 @@ const TCDRender = (function () {
       if (showRowTotal) { tr.append(valueCell('pvtGrandTotal', pd.getAggregator([], []), info, [], [])); }
     }
 
+    if (rows.length * colKeys.length > 3000) { table.classList.add('is-large'); }
     if (s.renderer === 'heat') { heatmap(table, m ? s.heatScope : 'all'); }
     if (s.renderer === 'bars') { bars(table); }
     return { table, pd, info, rowCount: rows.length };
@@ -268,7 +269,17 @@ const TCDRender = (function () {
     return b;
   }
 
-  function heatGroup(cells) {
+  /** Couleurs du thème courant, lues une fois par rendu (rgb) */
+  function themeRgb(name) {
+    const probe = document.createElement('span');
+    probe.style.color = `var(${name})`;
+    document.body.append(probe);
+    const m = getComputedStyle(probe).color.match(/[\d.]+/g) || [0, 0, 0];
+    probe.remove();
+    return m.slice(0, 3).map(Number);
+  }
+
+  function heatGroup(cells, palette) {
     let min = Infinity, max = -Infinity;
     const values = cells.map(c => {
       const v = parseFloat(c.getAttribute('data-value'));
@@ -280,7 +291,10 @@ const TCDRender = (function () {
       const v = values[i];
       if (!isFinite(v)) { return; }
       const t = range ? (v - min) / range : 0.5;
-      c.style.setProperty('--heat', t.toFixed(3));
+      // Mélange surface → accent calculé ici : bien plus rapide qu'un color-mix() CSS par cellule
+      const p = t * 0.78 + 0.04;
+      const rgb = palette.surface.map((x, k) => Math.round(x + (palette.accent[k] - x) * p));
+      c.style.backgroundColor = `rgb(${rgb.join(',')})`;
       c.classList.add('is-heat');
       if (t > 0.62) { c.classList.add('is-heat-strong'); }
     });
@@ -294,6 +308,8 @@ const TCDRender = (function () {
 
   function heatmap(table, scope) {
     const cells = valueCells(table);
+    const palette = { surface: themeRgb('--surface'), accent: themeRgb('--accent-base') };
+    const heat = group => heatGroup(group, palette);
     if (scope === 'row' || scope === 'col') {
       const groups = new Map();
       for (const c of cells) {
@@ -301,9 +317,9 @@ const TCDRender = (function () {
         if (!groups.has(k)) { groups.set(k, []); }
         groups.get(k).push(c);
       }
-      groups.forEach(heatGroup);
+      groups.forEach(heat);
     } else {
-      heatGroup(cells);
+      heat(cells);
     }
   }
 
@@ -321,26 +337,28 @@ const TCDRender = (function () {
     });
   }
 
-  /** En-têtes figés : calcule les décalages des lignes d'en-tête et des colonnes de libellés */
+  /**
+   * En-têtes figés : calcule les décalages des lignes d'en-tête et des colonnes de libellés.
+   * Toutes les mesures sont lues avant d'écrire les styles, pour ne provoquer qu'un seul calcul de mise en page.
+   */
   function stick(table) {
     const thead = table.tHead;
     if (!thead) { return; }
-    let top = 0;
-    for (const tr of thead.rows) {
-      for (const cell of tr.cells) { cell.style.top = top + 'px'; }
-      top += tr.offsetHeight;
-    }
+    const heights = [...thead.rows].map(tr => tr.offsetHeight);
+    const axisCells = [...table.querySelectorAll('thead th.pvtRowAxis')];
+    const widths = axisCells.map(cell => cell.offsetWidth);
+
     const lefts = [];
-    let x = 0;
-    table.querySelectorAll('thead th.pvtRowAxis').forEach((cell, j) => {
-      lefts[j] = x;
-      cell.style.left = x + 'px';
-      x += cell.offsetWidth;
+    widths.reduce((x, w, j) => { lefts[j] = x; return x + w; }, 0);
+    let top = 0;
+    [...thead.rows].forEach((tr, i) => {
+      const value = top + 'px';
+      for (const cell of tr.cells) { cell.style.top = value; }
+      top += heights[i];
     });
-    table.querySelectorAll('thead th.pvtColAxis, th.pvtColTotalLabel').forEach(cell => { cell.style.left = '0px'; });
-    table.querySelectorAll('tbody th.pvtRowLabel').forEach(cell => {
-      cell.style.left = (lefts[cell.dataset.level] || 0) + 'px';
-    });
+    axisCells.forEach((cell, j) => { cell.style.left = lefts[j] + 'px'; });
+    // Les libellés de lignes reçoivent leur décalage via une variable CSS par niveau
+    lefts.forEach((x, j) => table.style.setProperty(`--left-${j}`, x + 'px'));
   }
 
   return { buildPivotData, render, stick };

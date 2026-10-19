@@ -376,6 +376,7 @@ table.pvtTable th.pvtColAxis .corner-agg {
 }
 table.pvtTable th.pvtColAxis .axis-name { color: var(--text-subtle); }
 table.pvtTable thead th.pvtRowAxis { z-index: 4; }
+table.pvtTable thead th.pvtColAxis, table.pvtTable th.pvtColTotalLabel { left: 0; }
 table.pvtTable thead th.pvtColLabel.is-group { text-align: center; border-bottom-color: var(--border); }
 
 /* Libellés de lignes */
@@ -387,6 +388,11 @@ table.pvtTable tbody th.pvtRowLabel {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+table.pvtTable th.pvtRowLabel[data-level="1"] { left: var(--left-1, 0); }
+table.pvtTable th.pvtRowLabel[data-level="2"] { left: var(--left-2, 0); }
+table.pvtTable th.pvtRowLabel[data-level="3"] { left: var(--left-3, 0); }
+table.pvtTable th.pvtRowLabel[data-level="4"] { left: var(--left-4, 0); }
+table.pvtTable th.pvtRowLabel[data-level="5"] { left: var(--left-5, 0); }
 table.pvtTable tbody th.pvtRowLabel[rowspan="1"] { vertical-align: middle; }
 table.pvtTable tbody th.pvtRowLabel:not([data-level="0"]) { color: var(--text-muted); font-weight: 450; }
 table.pvtTable tbody th.pvtRowLabel[data-level="0"] { font-weight: 600; }
@@ -461,9 +467,7 @@ table.pvtTable tr.pvtTotalsRow > .pvtColTotalLabel, table.pvtTable tr.pvtTotalsR
 table.pvtTable td.pvtGrandTotal { background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
 
 /* Carte de chaleur (couleurs dérivées de l'accent : fonctionne en clair comme en sombre) */
-table.pvtTable td.is-heat {
-  background-color: color-mix(in srgb, var(--accent-base) calc(var(--heat) * 78% + 4%), var(--surface));
-}
+table.pvtTable.is-large { animation: none; }
 table.pvtTable td.is-heat-strong { color: var(--heat-text-strong); font-weight: 600; }
 table.pvtTable tbody tr:hover > td.is-heat, table.pvtTable td.is-heat.is-col-hover { filter: brightness(.96); }
 
