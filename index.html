@@ -2,63 +2,201 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8">
-    <title>PivotTable</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tableau croisé dynamique</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui-touch-punch/0.2.3/jquery.ui.touch-punch.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-
-    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.fr.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/export_renderers.min.js"></script>
   </head>
   <body>
+    <div id="app">
 
-      <!-- Add a view selector with two mode : original pivot table and fullscreen -->
-      <!-- Add a view selector with ten mode to select column and font size        -->
-      <div id="controls-container">
-          <div class="control-group">
-              <label for="view-mode-select">Vue :</label>
-              <select id="view-mode-select">
-                  <option value="pivot">Vue Tableau Croisé Dynamique</option>
-                  <option value="fullscreen">Vue Tableau plein écran</option>
-              </select>
+      <!-- Panneau de configuration : ouvert via « Ouvrir la configuration » dans le panneau Grist -->
+      <aside id="config" aria-label="Configuration du tableau croisé" hidden>
+        <div class="cfg-head">
+          <div class="cfg-title">
+            <h2>Configuration</h2>
+            <span id="save-state" class="save-state" aria-live="polite"></span>
           </div>
-          
-          <div class="control-group">
-              <label for="column-size-select">Taille colonnes :</label>
-              <select id="column-size-select">
-                  <option value="1.0">1.0x - Normal</option>
-                  <option value="0.9">0.9x - Légèrement réduit</option>
-                  <option value="0.8">0.8x - Compact</option>
-                  <option value="0.7">0.7x - Très compact</option>
-                  <option value="0.6">0.6x - Ultra compact</option>
-                  <option value="0.5">0.5x - Minimal</option>
-                  <option value="0.4">0.4x - Micro</option>
-                  <option value="0.35">0.35x - Nano</option>
-                  <option value="0.3">0.3x - Pico</option>
-                  <option value="0.25">0.25x - Extrême</option>
-              </select>
+          <div class="cfg-head-actions">
+            <button type="button" id="cfg-revert" class="btn btn-ghost" title="Revenir à l'état d'ouverture de la configuration">Annuler</button>
+            <button type="button" id="cfg-done" class="btn btn-primary">Terminer</button>
           </div>
-      </div>
-  
-    <!-- exit full screen -->
-    <button id="fullscreen-exit-button" title="Quitter le mode plein écran">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-      </svg>
-    </button>
-  
-    <!-- fullscreen container -->
-    <div id="fullscreen-table-container" style="display: none;"></div>
+        </div>
 
-    <div id="table"></div>
-    <script src="colorManager.js"></script>
-    <script src="columnSizeManager.js"></script>
-    <script src="PivotLabels.js"></script>
+        <div class="cfg-body">
+          <section class="cfg-section">
+            <div class="cfg-section-head">
+              <h3>Champs disponibles</h3>
+              <span id="field-count" class="muted"></span>
+            </div>
+            <input type="search" id="field-search" class="input" placeholder="Rechercher un champ…" autocomplete="off">
+            <ul id="zone-unused" class="zone zone-unused" data-zone="unused" data-placeholder="Tous les champs sont utilisés"></ul>
+            <p class="hint">Glissez un champ vers <b>Lignes</b> ou <b>Colonnes</b>, ou cliquez dessus.</p>
+          </section>
+
+          <section class="cfg-section">
+            <div class="cfg-section-head">
+              <h3><span class="zone-dot dot-rows"></span>Lignes</h3>
+              <button type="button" id="swap-axes" class="icon-btn sm" title="Inverser lignes et colonnes"></button>
+            </div>
+            <ul id="zone-rows" class="zone zone-rows" data-zone="rows" data-placeholder="Déposez un champ ici"></ul>
+          </section>
+
+          <section class="cfg-section">
+            <div class="cfg-section-head">
+              <h3><span class="zone-dot dot-cols"></span>Colonnes</h3>
+            </div>
+            <ul id="zone-cols" class="zone zone-cols" data-zone="cols" data-placeholder="Déposez un champ ici"></ul>
+          </section>
+
+          <section class="cfg-section">
+            <div class="cfg-section-head">
+              <h3><span class="zone-dot dot-vals"></span>Valeurs</h3>
+            </div>
+            <label class="field">
+              <span class="field-label">Calcul</span>
+              <select id="agg-select" class="input"></select>
+            </label>
+            <div id="val-inputs"></div>
+          </section>
+
+          <section class="cfg-section" id="filters-section">
+            <div class="cfg-section-head">
+              <h3>Filtres actifs</h3>
+              <button type="button" id="clear-filters" class="link-btn">Tout effacer</button>
+            </div>
+            <div id="active-filters" class="filter-list"></div>
+          </section>
+
+          <details class="cfg-section" open>
+            <summary><h3>Affichage</h3></summary>
+            <div class="field">
+              <span class="field-label">Mise en forme</span>
+              <div class="segmented" id="renderer-seg" role="radiogroup">
+                <button type="button" data-value="table" role="radio">Tableau</button>
+                <button type="button" data-value="heat" role="radio">Carte de chaleur</button>
+                <button type="button" data-value="bars" role="radio">Barres</button>
+              </div>
+            </div>
+            <label class="field" id="heat-scope-field">
+              <span class="field-label">Échelle de couleur</span>
+              <select id="heat-scope" class="input">
+                <option value="all">Sur tout le tableau</option>
+                <option value="row">Par ligne</option>
+                <option value="col">Par colonne</option>
+              </select>
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span class="field-label">Tri des lignes</span>
+                <select id="row-order" class="input order-select"></select>
+              </label>
+              <label class="field">
+                <span class="field-label">Tri des colonnes</span>
+                <select id="col-order" class="input order-select"></select>
+              </label>
+            </div>
+            <div class="field">
+              <span class="field-label">Totaux</span>
+              <label class="switch"><input type="checkbox" id="row-totals"><span></span>Total par ligne</label>
+              <label class="switch"><input type="checkbox" id="col-totals"><span></span>Total par colonne</label>
+            </div>
+          </details>
+
+          <details class="cfg-section" open>
+            <summary><h3>Format des nombres</h3></summary>
+            <div class="field-row three">
+              <label class="field">
+                <span class="field-label">Décimales</span>
+                <select id="decimals" class="input">
+                  <option value="auto">Auto</option>
+                  <option value="0">0</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">Échelle</span>
+                <select id="scale" class="input">
+                  <option value="1">Unités</option>
+                  <option value="1000">Milliers (k)</option>
+                  <option value="1000000">Millions (M)</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">Unité</span>
+                <input id="suffix" class="input" list="suffix-list" placeholder="ex. €" maxlength="8">
+                <datalist id="suffix-list"><option value="€"><option value="%"><option value="h"><option value="m²"><option value="ETP"></datalist>
+              </label>
+            </div>
+            <p class="hint" id="format-preview"></p>
+          </details>
+
+          <details class="cfg-section" open>
+            <summary><h3>Apparence</h3></summary>
+            <div class="field">
+              <span class="field-label">Densité</span>
+              <div class="segmented" id="density-seg" role="radiogroup">
+                <button type="button" data-value="compact" role="radio">Compacte</button>
+                <button type="button" data-value="standard" role="radio">Standard</button>
+                <button type="button" data-value="comfortable" role="radio">Aérée</button>
+              </div>
+            </div>
+            <div class="field">
+              <span class="field-label">Couleur d'accent</span>
+              <div class="swatches" id="accent-swatches" role="radiogroup"></div>
+            </div>
+          </details>
+        </div>
+      </aside>
+
+      <!-- Barre de consultation -->
+      <header id="viewbar">
+        <div id="summary" class="summary"></div>
+        <div class="viewbar-actions">
+          <button type="button" id="btn-display" class="icon-btn" title="Affichage" aria-haspopup="true"></button>
+          <button type="button" id="btn-export" class="icon-btn" title="Exporter" aria-haspopup="true"></button>
+        </div>
+      </header>
+
+      <main id="stage">
+        <div id="output" class="output" tabindex="0"></div>
+      </main>
+
+      <!-- Détail d'une cellule -->
+      <div id="drawer-backdrop" hidden></div>
+      <aside id="drawer" aria-label="Détail de la cellule" hidden>
+        <div class="drawer-head">
+          <div>
+            <div class="drawer-kicker">Détail</div>
+            <div id="drawer-value" class="drawer-value"></div>
+            <div id="drawer-sub" class="drawer-sub"></div>
+          </div>
+          <button type="button" id="drawer-close" class="icon-btn" title="Fermer (Échap)"></button>
+        </div>
+        <div id="drawer-filters" class="filter-list"></div>
+        <div id="drawer-body" class="drawer-body"></div>
+        <div class="drawer-foot">
+          <button type="button" id="drawer-select" class="btn btn-primary">Sélectionner ces lignes dans Grist</button>
+        </div>
+      </aside>
+
+      <div id="popover" class="popover" hidden></div>
+      <div id="tooltip" class="tooltip" hidden></div>
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <script src="icons.js"></script>
+    <script src="ui.js"></script>
+    <script src="data.js"></script>
+    <script src="aggregators.js"></script>
+    <script src="render.js"></script>
+    <script src="config.js"></script>
     <script src="index.js"></script>
   </body>
 </html>
