@@ -315,7 +315,8 @@ const TCDConfig = (function () {
     const open = el('button', {
       type: 'button', class: 'filter-pill-main', title: 'Modifier le filtre',
       html: Icons.svg('filter', 12) + '<span></span>',
-      onclick: () => openFilter(attr, pill),
+      // Dans une popover, la pastille disparaît à l'ouverture du filtre : on ancre sur le bouton de résumé
+      onclick: () => openFilter(attr, compact ? (document.querySelector('.sum-filters') || pill) : pill),
     });
     open.querySelector('span').textContent = `${label(attr)} · ${values.length} masquée${values.length > 1 ? 's' : ''}`;
     const clear = el('button', {

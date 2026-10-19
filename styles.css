@@ -410,11 +410,13 @@ table.pvtTable tbody tr:hover > td.pvtVal,
 table.pvtTable tbody tr:hover > th.pvtRowLabel:last-of-type,
 table.pvtTable td.pvtVal.is-col-hover { background-color: var(--row-hover); }
 table.pvtTable td.pvtVal:hover, table.pvtTable td.pvtTotal:hover, table.pvtTable td.pvtGrandTotal:hover,
+table.pvtTable td:focus-visible,
 table.pvtTable td.is-selected {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 table.pvtTable td.pvtVal:empty::after { content: "–"; color: var(--text-subtle); }
+table.pvtTable td:focus { outline: none; }
 
 /* Sous-totaux et groupes repliables */
 table.pvtTable tr.pvtSubtotalRow > * { background: var(--surface-2); font-weight: 650; }

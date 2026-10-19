@@ -285,8 +285,10 @@ function renderSummary(s) {
 
 // Colonnes indexées pour le surlignage en croix au survol
 let colCells = new Map();
+let hoverCol = null;
 function indexColumns(table) {
   colCells = new Map();
+  hoverCol = null;
   table.querySelectorAll('td.pvtVal, td.pvtSubtotal').forEach(td => {
     const j = td.dataset.col;
     if (j === undefined) { return; }
@@ -312,7 +314,7 @@ function criteriaFor(keys) {
 }
 
 const tooltip = $id('tooltip');
-let hoverCol = null, tooltipTimer = null;
+let tooltipTimer = null;
 
 function setHoverCol(key) {
   if (hoverCol === key) { return; }
@@ -357,6 +359,7 @@ function setupTableInteractions() {
     tooltipTimer = setTimeout(() => showTooltip(td, e.clientX, e.clientY), 350);
   });
   out.addEventListener('mouseleave', () => { setHoverCol(null); hideTooltip(); });
+  out.addEventListener('keydown', onTableKey);
   out.addEventListener('scroll', hideTooltip, { passive: true });
   out.addEventListener('click', e => {
     const toggle = e.target.closest('.grp-toggle');
@@ -394,6 +397,52 @@ function setAllCollapsed(collapse) {
     for (const key of state.pd.getRowKeys()) { state.view.collapsed.add(String(key[0])); }
   }
   scheduleRender();
+}
+
+const NAV_CELLS = 'td.pvtVal, td.pvtSubtotal, td.pvtTotal, td.pvtGrandTotal';
+
+/** Navigation au clavier : flèches entre les cellules, Entrée pour le détail */
+function onTableKey(e) {
+  const table = $id('output').querySelector('table.pvtTable');
+  if (!table || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Home', 'End'].includes(e.key)) { return; }
+  const current = document.activeElement && document.activeElement.matches && document.activeElement.matches(NAV_CELLS) ? document.activeElement : null;
+  if (!current) {
+    if (e.key.startsWith('Arrow')) {
+      e.preventDefault();
+      focusCell(table.querySelector(NAV_CELLS));
+    }
+    return;
+  }
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    const keys = cellKeys(current);
+    if (keys) { openDrawer(keys, current); }
+    return;
+  }
+  e.preventDefault();
+  const cellsOf = tr => [...tr.querySelectorAll(NAV_CELLS)];
+  const row = current.parentElement;
+  const index = cellsOf(row).indexOf(current);
+  let target = null;
+  if (e.key === 'ArrowLeft') { target = cellsOf(row)[index - 1]; }
+  if (e.key === 'ArrowRight') { target = cellsOf(row)[index + 1]; }
+  if (e.key === 'Home') { target = cellsOf(row)[0]; }
+  if (e.key === 'End') { target = cellsOf(row).pop(); }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    let tr = row;
+    do { tr = e.key === 'ArrowUp' ? tr.previousElementSibling : tr.nextElementSibling; } while (tr && !cellsOf(tr).length);
+    if (tr) { const cells = cellsOf(tr); target = cells[Math.min(index, cells.length - 1)]; }
+  }
+  focusCell(target);
+}
+
+function focusCell(td) {
+  if (!td) { return; }
+  td.tabIndex = -1;
+  td.focus({ preventScroll: false });
+  td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const r = td.getBoundingClientRect();
+  showTooltip(td, r.right - 8, r.bottom - 4);
 }
 
 let selectedTd = null;

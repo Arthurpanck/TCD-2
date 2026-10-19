@@ -197,6 +197,35 @@ await test('vue graphique : rendu, changement de type et détail au clic', async
   await page.close();
 });
 
+await test('navigation au clavier dans le tableau', async () => {
+  const page = await open({ settings: base });
+  await page.focus('#output');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
+  const focused = await page.evaluate(() => [document.activeElement.dataset.row, document.activeElement.dataset.col].join(','));
+  assert(focused === '1,1', 'cellule active inattendue : ' + focused);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(250);
+  assert(await page.locator('#drawer').isVisible(), 'Entrée doit ouvrir le détail');
+  await page.close();
+});
+
+await test('filtres rapides depuis la barre de résumé', async () => {
+  const page = await open({ settings: { ...base, exclusions: { Region: ['Bretagne'] } } });
+  await page.click('.sum-filters');
+  await page.click('.popover .filter-pill-main');
+  await page.waitForTimeout(150);
+  const box = await page.locator('.popover').boundingBox();
+  const anchor = await page.locator('.sum-filters').boundingBox();
+  assert(Math.abs(box.y - (anchor.y + anchor.height + 6)) < 4, `fenêtre de filtre mal positionnée (y=${box.y})`);
+  await page.locator('.fp-item', { hasText: 'Bretagne' }).locator('input').check();
+  await page.click('.fp-foot .btn-primary');
+  await page.waitForTimeout(500);
+  assert(await page.locator('.sum-filters').count() === 0, 'le filtre doit être retiré');
+  await page.close();
+});
+
 await test('export : la matrice reprend les totaux du tableau', async () => {
   const page = await open({ settings: base });
   const rows = await page.evaluate(() => exportMatrix());
