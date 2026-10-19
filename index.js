@@ -184,8 +184,7 @@ function render() {
       return showMessage('grid', 'Construisez votre tableau', 'Glissez un champ dans « Lignes » ou « Colonnes », ou cliquez sur un champ pour choisir où le placer.');
     }
     return showMessage('grid', "Ce tableau croisé n'est pas encore configuré",
-      'Cliquez sur « Ouvrir la configuration » dans le panneau de droite de Grist, ou directement ci-dessous.',
-      { label: 'Configurer le tableau', onClick: openConfig });
+      'Pour le construire, cliquez sur « Ouvrir la configuration » dans le panneau de droite de Grist (onglet du widget).');
   }
 
   if (s.renderer === 'chart') { return renderChart(s); }

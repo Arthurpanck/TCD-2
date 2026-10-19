@@ -74,11 +74,13 @@ await test("reprend les réglages des anciennes versions (anglais, taille colonn
   await page.close();
 });
 
-await test('message et bouton quand le tableau n’est pas configuré', async () => {
+await test('message sans bouton quand le tableau n’est pas configuré (configuration via Grist uniquement)', async () => {
   const page = await open({});
   assert(await page.locator('.empty h3').textContent() === "Ce tableau croisé n'est pas encore configuré", 'message absent');
-  await page.click('.empty .btn-primary');
-  assert(await page.locator('#config').isVisible(), 'le bouton doit ouvrir la configuration');
+  assert((await page.locator('.empty p').textContent()).includes('Ouvrir la configuration'), 'le message doit renvoyer vers le bouton Grist');
+  assert(await page.locator('.empty button').count() === 0, 'aucun bouton de configuration ne doit être affiché dans le widget');
+  await page.evaluate(() => grist.__openConfig());
+  assert(await page.locator('#config').isVisible(), 'le bouton Grist doit ouvrir la configuration');
   await page.close();
 });
 
