@@ -19,14 +19,15 @@
   <body>
     <div id="app">
 
-      <!-- Panneau de configuration, au-dessus du tableau : ouvert via « Ouvrir la configuration » dans le panneau Grist -->
+      <!-- Panneau de configuration, sur tout le widget : ouvert via « Ouvrir la configuration » dans le panneau Grist -->
       <aside id="config" aria-label="Configuration du tableau croisé" hidden>
         <div class="cfg-head">
           <div class="cfg-title">
             <h2 class="fr-h6 fr-mb-0">Configuration</h2>
             <span id="save-state" class="save-state" aria-live="polite"></span>
           </div>
-          <ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-btns-group--right">
+          <ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-btns-group--right fr-btns-group--icon-left">
+            <li><button type="button" id="cfg-preview" class="fr-btn fr-btn--secondary fr-icon-eye-line" aria-haspopup="dialog" aria-controls="preview">Aperçu du tableau</button></li>
             <li><button type="button" id="cfg-revert" class="fr-btn fr-btn--secondary" title="Revenir à l'état d'ouverture de la configuration">Annuler</button></li>
             <li><button type="button" id="cfg-done" class="fr-btn">Terminer</button></li>
           </ul>
@@ -137,10 +138,6 @@
           <div id="slot-renderer" hidden></div>
         </div>
 
-        <!-- Poignée : partage de la hauteur entre la configuration et le tableau -->
-        <div id="cfg-resizer" class="cfg-resizer" role="separator" aria-orientation="horizontal" aria-controls="config"
-             aria-label="Hauteur de la configuration" aria-valuemin="200" tabindex="0"
-             title="Glisser pour partager la hauteur avec le tableau (double-clic : hauteur par défaut)"></div>
       </aside>
 
       <!-- Barre de consultation -->
@@ -160,6 +157,17 @@
           </div>
         </div>
       </main>
+
+      <!-- Aperçu pendant la configuration : modale du DSFR où passent la barre de résumé et le tableau -->
+      <dialog id="preview" class="fr-modal preview-modal" aria-labelledby="preview-title">
+        <div class="fr-modal__body preview-body">
+          <div class="fr-modal__header preview-head">
+            <h2 id="preview-title" class="fr-modal__title">Aperçu du tableau</h2>
+            <button type="button" id="preview-close" class="fr-btn--close fr-btn" title="Fermer l'aperçu" aria-controls="preview">Fermer</button>
+          </div>
+          <div id="preview-content" class="preview-content"></div>
+        </div>
+      </dialog>
 
       <div id="filter-layer"></div>
       <div id="popover" class="popover" hidden></div>

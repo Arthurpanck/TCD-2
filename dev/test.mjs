@@ -512,37 +512,30 @@ await test('titre du tableau : barre de résumé, légende pour lecteurs d’éc
   await page.close();
 });
 
-await test('configuration au-dessus du tableau, hauteur réglable : glisser, clavier, limites et mémoire', async () => {
+await test('configuration sur tout le widget, tableau en aperçu dans une modale', async () => {
   const page = await open({ settings: base });
   await page.evaluate(() => grist.__openConfig());
-  const height = () => page.locator('#config').evaluate(n => n.offsetHeight);
-  const cfg = await page.locator('#config').boundingBox();
-  const stage = await page.locator('#stage').boundingBox();
-  assert(stage.y > cfg.y + cfg.height - 1, 'le tableau doit être sous la configuration');
+  assert(!(await page.locator('#stage').isVisible()), 'le tableau est masqué pendant la configuration');
   assert(await page.locator('.cfg-col').count() === 3, 'trois colonnes attendues');
-  const start = await height();
-  const h = await page.locator('#cfg-resizer').boundingBox();
-  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2 - 100, { steps: 5 });
-  await page.mouse.up();
-  const dragged = await height();
-  assert(Math.abs(dragged - (start - 100)) <= 2, `hauteur après glisser : ${dragged} (départ ${start})`);
-  await page.locator('#cfg-resizer').focus();
-  await page.keyboard.press('ArrowDown');
-  assert(await height() === dragged + 24, 'flèche bas : +24 px attendus');
-  const h2 = await page.locator('#cfg-resizer').boundingBox();
-  await page.mouse.move(h2.x + h2.width / 2, h2.y + h2.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(h2.x + h2.width / 2, 700, { steps: 5 });
-  await page.mouse.up();
-  assert(await height() === 760 - 180, 'le tableau garde 180 px : ' + await height());
-  await page.reload();
-  await page.waitForTimeout(400);
-  await page.evaluate(() => grist.__openConfig());
-  assert(await height() === 580, 'hauteur non retenue après rechargement : ' + await height());
-  await page.dblclick('#cfg-resizer');
-  assert(await height() === Math.round(760 * 0.55), 'double-clic : hauteur par défaut attendue');
+  await page.click('#cfg-preview');
+  assert(await page.locator('#preview #stage').isVisible(), 'le tableau doit s’afficher dans la modale');
+  assert(await page.evaluate(() => document.activeElement.id) === 'preview-close', 'focus sur « Fermer »');
+  await page.locator('tbody td.pvtVal').first().click();
+  assert((await page.evaluate(() => window.__mockGrist.selected) || []).length > 0, 'la case cliquée dans l’aperçu filtre les vues liées');
+  await page.click('#btn-export');
+  await page.keyboard.press('Escape');
+  assert(await page.locator('#preview #stage').isVisible(), 'Échap ferme d’abord le menu');
+  assert((await page.evaluate(() => window.__mockGrist.selected) || []).length > 0, 'fermer un menu ne désélectionne pas');
+  await page.keyboard.press('Escape');
+  assert(!(await page.locator('#stage').isVisible()), 'Échap ferme l’aperçu');
+  assert(await page.evaluate(() => document.activeElement.id) === 'cfg-preview', 'focus rendu au bouton d’aperçu');
+  await page.click('#cfg-preview');
+  await page.mouse.click(5, 300);
+  assert(!(await page.locator('#stage').isVisible()), 'un clic hors de la modale la ferme');
+  await page.click('#cfg-preview');
+  await page.evaluate(() => grist.__closeConfig ? grist.__closeConfig() : document.getElementById('cfg-done').click());
+  await page.waitForTimeout(200);
+  assert(await page.locator('#app > #stage').isVisible(), 'en consultation, le tableau reprend sa place');
   await page.close();
 });
 

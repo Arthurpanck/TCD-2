@@ -791,6 +791,7 @@ function openConfig() {
 }
 
 function closeConfig() {
+  closePreview();
   state.configOpen = false;
   state.snapshot = null;
   UI.closePopover();
@@ -799,6 +800,30 @@ function closeConfig() {
   document.body.classList.remove('is-config');
   saveNow();
   if (state.pvt) { showResult(); restick(); }
+}
+
+// Aperçu pendant la configuration : la barre de résumé et le tableau passent dans une modale du DSFR
+// (ouverte sans le JavaScript du DSFR : classe fr-modal--opened), puis reprennent leur place
+const previewOpen = () => document.body.classList.contains('is-preview');
+
+function openPreview() {
+  $id('preview-content').append($id('viewbar'), $id('stage'));
+  $id('preview').setAttribute('open', '');
+  $id('preview').classList.add('fr-modal--opened');
+  document.body.classList.add('is-preview');
+  $id('preview-close').focus();
+}
+
+function closePreview() {
+  if (!previewOpen()) { return; }
+  UI.closePopover();
+  hideTooltip();
+  const dialog = $id('preview');
+  dialog.classList.remove('fr-modal--opened');
+  dialog.removeAttribute('open');
+  document.body.classList.remove('is-preview');
+  dialog.before($id('viewbar'), $id('stage'));
+  if (state.configOpen) { $id('cfg-preview').focus(); }
 }
 
 function revert() {
@@ -857,9 +882,17 @@ function handleOptions(options) {
 function start() {
   $id('btn-display').addEventListener('click', e => openDisplayMenu(e.currentTarget));
   $id('btn-export').addEventListener('click', e => openExportMenu(e.currentTarget));
+  $id('cfg-preview').addEventListener('click', openPreview);
+  $id('preview-close').addEventListener('click', closePreview);
+  $id('preview').addEventListener('mousedown', e => { if (e.target === e.currentTarget) { closePreview(); } });
+  // Échap ferme l'aperçu, après un éventuel menu ouvert dedans (sans désélectionner la case)
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && previewOpen() && $id('popover').hidden) { e.stopImmediatePropagation(); closePreview(); }
+  }, true);
+  // Échap désélectionne, sauf s'il ferme d'abord un menu (vérifié avant que le menu ne se ferme)
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && $id('popover').hidden) { clearSelection(); }
-  });
+  }, true);
 
   showMessage('fr-icon-table-line', 'Chargement des données…', '');
   $id('output').classList.add('is-loading');

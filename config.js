@@ -32,7 +32,6 @@ const TCDConfig = (function () {
       v => app.update({ density: v })), { id: 'density-seg' }));
 
     $id('table-title').addEventListener('input', e => app.update({ title: e.target.value }));
-    initResizer();
     $id('swap-axes').addEventListener('click', swapAxes);
     $id('clear-filters').addEventListener('click', () => clearFilter(null));
     $id('field-search').addEventListener('input', filterFieldList);
@@ -51,51 +50,6 @@ const TCDConfig = (function () {
 
   function setSegmented(root, value) {
     root.querySelectorAll('input[type="radio"]').forEach(r => { r.checked = r.value === value; });
-  }
-
-  // Hauteur du panneau, au-dessus du tableau : réglée en faisant glisser son bord inférieur.
-  // Préférence de l'utilisateur, gardée dans son navigateur ; le tableau garde toujours un minimum de place.
-  const HEIGHT_KEY = 'tcd-config-height';
-  const MIN_HEIGHT = 200;
-  const defaultHeight = () => Math.round(window.innerHeight * 0.55);
-  const panelHeight = () => Number($id('cfg-resizer').getAttribute('aria-valuenow')) || defaultHeight();
-
-  function setPanelHeight(height, persist) {
-    const max = Math.max(MIN_HEIGHT, window.innerHeight - 180);
-    const h = Math.round(Math.min(max, Math.max(MIN_HEIGHT, height)));
-    $id('app').style.setProperty('--cfg-height', h + 'px');
-    $id('cfg-resizer').setAttribute('aria-valuenow', h);
-    $id('cfg-resizer').setAttribute('aria-valuemax', max);
-    if (persist) { try { localStorage.setItem(HEIGHT_KEY, String(h)); } catch (e) { /* stockage indisponible */ } }
-  }
-
-  function initResizer() {
-    const handle = $id('cfg-resizer');
-    let saved = 0;
-    try { saved = Number(localStorage.getItem(HEIGHT_KEY)); } catch (e) { /* stockage indisponible */ }
-    setPanelHeight(saved || defaultHeight(), false);
-    handle.addEventListener('pointerdown', e => {
-      e.preventDefault();
-      handle.setPointerCapture(e.pointerId);
-      const top = $id('config').getBoundingClientRect().top;
-      const move = ev => setPanelHeight(ev.clientY - top, false);
-      document.body.classList.add('is-resizing');
-      handle.addEventListener('pointermove', move);
-      handle.addEventListener('lostpointercapture', () => {
-        handle.removeEventListener('pointermove', move);
-        document.body.classList.remove('is-resizing');
-        setPanelHeight(panelHeight(), true);
-      }, { once: true });
-    });
-    handle.addEventListener('keydown', e => {
-      const step = { ArrowUp: -24, ArrowDown: 24 }[e.key];
-      if (step) { e.preventDefault(); setPanelHeight(panelHeight() + step, true); }
-    });
-    handle.addEventListener('dblclick', () => {
-      try { localStorage.removeItem(HEIGHT_KEY); } catch (e) { /* stockage indisponible */ }
-      setPanelHeight(defaultHeight(), false);
-    });
-    window.addEventListener('resize', () => setPanelHeight(panelHeight(), false));
   }
 
   /** Choisit le rendu dans la liste de pivotUI, qui recalcule le tableau */
