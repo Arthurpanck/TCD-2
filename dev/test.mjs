@@ -15,6 +15,9 @@ let failures = 0, passed = 0;
 async function open(options, { width = 1280, height = 760, data, meta } = {}) {
   const page = await browser.newPage({ viewport: { width, height } });
   page.setDefaultTimeout(5000);
+  // Chargement de la page (bibliothèques sur les CDN) : plus de marge que les actions ; on n'attend pas
+  // les icônes et polices du DSFR (événement load), parfois retardées par le réseau
+  page.setDefaultNavigationTimeout(20000);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   // Les aléas réseau des CDN (icônes du DSFR sur jsdelivr) ne sont pas des erreurs du widget
@@ -26,7 +29,7 @@ async function open(options, { width = 1280, height = 760, data, meta } = {}) {
     if (m) { window.__MOCK_META__ = m; }
   }, [options, data, meta]);
   await page.route('**/grist-plugin-api.js', r => r.fulfill({ body: mock, contentType: 'application/javascript' }));
-  await page.goto(URL);
+  await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(400);
   page.errors = errors;
   return page;
@@ -301,7 +304,6 @@ await test('accès complet : format et libellés des colonnes repris de Grist', 
   assert((await page.locator('#summary').textContent()).includes('Somme de Montant engagé'), 'libellé Grist non repris');
   assert(await page.locator('th.pvtAxisLabel', { hasText: 'Région' }).count() === 1, 'libellé de colonne non repris dans le tableau');
   await page.evaluate(() => grist.__openConfig());
-  assert((await page.locator('#format-hint').textContent()).includes('format de la colonne'), 'indication de format absente');
   await page.close();
 });
 
@@ -313,10 +315,9 @@ await test('format par défaut : pas de bruit de virgule flottante dans les tota
   await page.close();
 });
 
-await test('lecture seule : format par défaut de Grist et indication pour l’accès complet', async () => {
+await test('lecture seule : format par défaut de Grist', async () => {
   const page = await open({ settings: base });
   await page.evaluate(() => grist.__openConfig());
-  assert((await page.locator('#format-hint').textContent()).includes('accès complet'), 'indication accès complet absente');
   assert(await page.locator('#decimals, #scale, #suffix, #accent-swatches').count() === 0, 'les anciens réglages de format/couleur doivent avoir disparu');
   assert(await page.locator('#renderer-seg input[value="chart"]').count() === 0, 'le mode graphique doit avoir disparu');
   await page.close();
@@ -540,7 +541,7 @@ await test('configuration au-dessus du tableau, hauteur réglable : glisser, cla
   await page.mouse.move(h2.x + h2.width / 2, 700, { steps: 5 });
   await page.mouse.up();
   assert(await height() === 760 - 180, 'le tableau garde 180 px : ' + await height());
-  await page.reload();
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(400);
   await page.evaluate(() => grist.__openConfig());
   assert(await height() === 580, 'hauteur non retenue après rechargement : ' + await height());

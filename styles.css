@@ -257,8 +257,19 @@ body.is-resizing { cursor: row-resize; user-select: none; }
   padding: .75rem 1rem;
   border-bottom: 1px solid var(--border-default-grey);
 }
-.cfg-title { display: flex; align-items: baseline; gap: .75rem; min-width: 0; }
-.cfg-title h2 { font-size: 1.125rem; line-height: 1.5rem; }
+.cfg-title { flex: 1; display: flex; align-items: center; gap: .75rem; min-width: 0; }
+/* Titre modifiable en place : un titre de section, souligné en pointillé pour inviter à le saisir */
+.cfg-title-input {
+  flex: 1; min-width: 0; max-width: 36rem;
+  padding: .25rem .125rem;
+  border: 0; border-bottom: 1px dashed var(--border-plain-grey); border-radius: 0;
+  background: transparent; color: var(--text-title-grey);
+  font: inherit; font-size: 1.125rem; line-height: 1.5rem; font-weight: 700;
+}
+.cfg-title-input::placeholder { color: var(--text-mention-grey); font-weight: 400; font-style: italic; }
+.cfg-title-input:hover { border-bottom-color: var(--border-action-high-blue-france); }
+.cfg-title-input:focus { border-bottom: 2px solid var(--border-action-high-blue-france); outline-offset: 4px; }
+.save-state { flex: none; }
 .cfg-head .fr-btns-group { flex-wrap: nowrap; margin: 0; }
 .cfg-head .fr-btns-group > li { width: auto; }
 .cfg-head .fr-btns-group .fr-btn { margin: 0 0 0 .5rem; }
@@ -281,7 +292,7 @@ body.is-resizing { cursor: row-resize; user-select: none; }
 .cfg-section--grow #slot-unused { flex: 1; min-height: 4rem; display: flex; }
 .cfg-section--grow td.pvtUnused { flex: 1; max-height: none; }
 .cfg-display > * + * { margin-top: 1rem; }
-.cfg-display .fr-segmented, .cfg-display .fr-select-group, .cfg-display .fr-input-group, .cfg-display .fr-toggle { margin-bottom: 0; }
+.cfg-display .fr-segmented, .cfg-display .fr-select-group, .cfg-display .fr-toggle { margin-bottom: 0; }
 .cfg-section-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
 .cfg-heading { margin: 0; font-size: .875rem; line-height: 1.5rem; font-weight: 700; color: var(--text-title-grey); }
 .cfg-section-head .fr-btn { margin: 0; }
@@ -443,6 +454,8 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
   body.is-config #stage { margin: 0 .5rem .5rem; }
 }
 @media (max-width: 520px) {
+  .cfg-head { flex-wrap: wrap; }
+  .cfg-title { flex-basis: 100%; }
   .summary .sum-sep, .summary .sum-x, .summary .sum-dim { display: none; }
   .viewbar-actions .fr-btn { font-size: 0; padding-left: .5rem; padding-right: .5rem; }
   .viewbar-actions .fr-btn::before { margin: 0; }
