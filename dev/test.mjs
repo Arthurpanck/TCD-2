@@ -153,8 +153,13 @@ await test('clic sur une case : filtre les vues liées (comme un point de la car
   assert(JSON.stringify(ids) === JSON.stringify(expected), `lignes transmises : ${ids && ids.length} au lieu de ${expected.length}`);
   assert(await page.locator('#drawer, .detail-table').count() === 0, 'aucun panneau de détail ne doit exister');
   assert(await page.locator('td.is-selected').count() === 1, 'case non mise en évidence');
+  const pill = await page.locator('.sum-selection').textContent();
+  assert(pill.includes('Auvergne-Rhône-Alpes') && pill.includes(`${expected.length} ligne`), 'pastille de sélection : ' + pill);
   await cell.click();
   assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'second clic : les vues liées doivent tout réafficher');
+  await cell.click();
+  await page.click('.sum-selection button');
+  assert(await page.evaluate(() => window.__mockGrist.selected) === null && await page.locator('.sum-selection').count() === 0, 'la croix de la pastille doit désélectionner');
   await cell.click();
   await page.keyboard.press('Escape');
   assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'Échap : les vues liées doivent tout réafficher');

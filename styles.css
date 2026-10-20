@@ -175,6 +175,17 @@ body.is-config #viewbar {
   font: 600 11.5px var(--font);
 }
 .sum-filters:hover { filter: brightness(.97); }
+/* Case sélectionnée : rappel de ce qui est envoyé aux vues liées */
+.sum-selection {
+  display: inline-flex; align-items: center;
+  max-width: 100%; min-width: 0; flex-shrink: 1;
+  border-radius: 999px;
+  background: var(--accent); color: var(--accent-contrast);
+  font: 600 11.5px var(--font);
+}
+.sum-selection > span { padding: 1px 2px 1px 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sum-selection > button { display: inline-flex; padding: 2px 7px 2px 4px; border: 0; background: none; color: inherit; cursor: pointer; opacity: .8; }
+.sum-selection > button:hover { opacity: 1; }
 
 .viewbar-actions { display: flex; gap: 2px; }
 
@@ -446,7 +457,7 @@ table.pvtTable tbody tr:has(> th.pvtTotalLabel.colTotal) > * {
   border-top: 1px solid var(--border-strong);
   border-bottom: 0;
 }
-table.pvtTable th.pvtTotalLabel.colTotal { left: 0; z-index: 3; }
+table.pvtTable tbody tr:has(> th.pvtTotalLabel.colTotal) > th.pvtTotalLabel.colTotal { left: 0; z-index: 3; }
 table.pvtTable tbody tr:has(> th.pvtTotalLabel.colTotal) > .pvtGrandTotal { z-index: 3; }
 table.pvtTable td.pvtGrandTotal { background: var(--accent-soft); color: var(--accent-strong); font-weight: 700; }
 table.pvtTable.hide-row-totals .rowTotal, table.pvtTable.hide-row-totals .pvtGrandTotal { display: none; }

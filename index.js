@@ -46,6 +46,7 @@ const state = {
   collapsed: { rows: [], cols: [] },
   rowLimit: ROW_LIMIT,
   selection: null,
+  selectionCount: 0,
   // Au-delà, pivotUI ne construit pas la liste de filtre d'un champ (coûteux) : elle est construite à la demande
   menuLimit: MENU_LIMIT,
   aggLabel: '',
@@ -335,6 +336,13 @@ function renderSummary(s) {
     });
     parts.push(btn);
   }
+  if (state.selection) {
+    const criteria = Object.values(JSON.parse(state.selection));
+    const n = state.selectionCount;
+    parts.push(el('span', { class: 'sum-selection', title: 'Lignes envoyées aux widgets Grist liés à ce tableau (« Sélectionner par »)' },
+      el('span', {}, `Sélection : ${criteria.length ? criteria.join(' · ') : 'tout'} — ${n.toLocaleString('fr-FR')} ligne${n > 1 ? 's' : ''}`),
+      el('button', { type: 'button', title: 'Désélectionner (Échap)', 'aria-label': 'Désélectionner', html: Icons.svg('x', 12), onclick: clearSelection })));
+  }
   box.replaceChildren(...parts);
   box.title = box.textContent;
 }
@@ -623,7 +631,9 @@ function markSelected(td) {
 function sendSelection(info) {
   const ids = [];
   info.pivotData.forEachMatchingRecord(info.filters, rec => { if (typeof rec.id === 'number') { ids.push(rec.id); } });
+  state.selectionCount = ids.length;
   selectRows(ids);
+  renderSummary(state.settings);
 }
 
 /** Après un calcul : retrouve la case sélectionnée et renvoie ses lignes (les données ont pu changer) */
@@ -646,6 +656,7 @@ function clearSelection() {
   state.selection = null;
   markSelected(null);
   selectRows(null);
+  renderSummary(state.settings);
 }
 
 function selectRows(ids) {
