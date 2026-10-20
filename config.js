@@ -372,9 +372,6 @@ const TCDConfig = (function () {
     $id('col-totals').checked = s.colTotals;
     $id('subtotals').checked = s.subtotals;
     setSegmented($id('density-seg'), s.density);
-    $id('format-hint').textContent = TCDGrist.isAvailable()
-      ? 'Les nombres reprennent le format de la colonne dans Grist.'
-      : "Les nombres s'affichent au format par défaut de Grist. Pour reprendre le format de la colonne (devise, %, décimales), donnez au widget l'accès complet au document.";
   }
 
   return { init, adopt, sync, openFilter, filterPill, setRenderer, closeFilters: closeFilterBoxes };
