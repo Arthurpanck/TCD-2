@@ -31,6 +31,8 @@ const TCDConfig = (function () {
     $id('density-seg').replaceWith(Object.assign(UI.segmented('Densité', TCDRender.DENSITIES, null,
       v => app.update({ density: v })), { id: 'density-seg' }));
 
+    $id('table-title').addEventListener('input', e => app.update({ title: e.target.value }));
+    initResizer();
     $id('swap-axes').addEventListener('click', swapAxes);
     $id('clear-filters').addEventListener('click', () => clearFilter(null));
     $id('field-search').addEventListener('input', filterFieldList);
@@ -56,6 +58,46 @@ const TCDConfig = (function () {
 
   function setSegmented(root, value) {
     root.querySelectorAll('input[type="radio"]').forEach(r => { r.checked = r.value === value; });
+  }
+
+  // Largeur du panneau, réglée en faisant glisser son bord : préférence de l'utilisateur, gardée dans son navigateur
+  const WIDTH_KEY = 'tcd-config-width';
+  const DEFAULT_WIDTH = 340;
+  const panelWidth = () => Number($id('cfg-resizer').getAttribute('aria-valuenow')) || DEFAULT_WIDTH;
+
+  function setPanelWidth(width, persist) {
+    const max = Math.round(Math.max(260, Math.min(window.innerWidth * 0.7, window.innerWidth - 320)));
+    const w = Math.round(Math.min(max, Math.max(260, width)));
+    $id('app').style.setProperty('--cfg-width', w + 'px');
+    $id('cfg-resizer').setAttribute('aria-valuenow', w);
+    $id('cfg-resizer').setAttribute('aria-valuemax', max);
+    if (persist) { try { localStorage.setItem(WIDTH_KEY, String(w)); } catch (e) { /* stockage indisponible */ } }
+  }
+
+  function initResizer() {
+    const handle = $id('cfg-resizer');
+    let saved = 0;
+    try { saved = Number(localStorage.getItem(WIDTH_KEY)); } catch (e) { /* stockage indisponible */ }
+    setPanelWidth(saved || DEFAULT_WIDTH, false);
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      const left = $id('config').getBoundingClientRect().left;
+      const move = ev => setPanelWidth(ev.clientX - left, false);
+      document.body.classList.add('is-resizing');
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('lostpointercapture', () => {
+        handle.removeEventListener('pointermove', move);
+        document.body.classList.remove('is-resizing');
+        setPanelWidth(panelWidth(), true);
+      }, { once: true });
+    });
+    handle.addEventListener('keydown', e => {
+      const step = { ArrowLeft: -16, ArrowRight: 16 }[e.key];
+      if (step) { e.preventDefault(); setPanelWidth(panelWidth() + step, true); }
+    });
+    handle.addEventListener('dblclick', () => setPanelWidth(DEFAULT_WIDTH, true));
+    window.addEventListener('resize', () => setPanelWidth(panelWidth(), false));
   }
 
   /** Choisit le rendu dans la liste de pivotUI, qui recalcule le tableau */
@@ -369,6 +411,7 @@ const TCDConfig = (function () {
       li.querySelector('.pvtTriangle').dataset.count = ex && ex.length ? ex.length : '';
     });
 
+    if (document.activeElement !== $id('table-title')) { $id('table-title').value = s.title; }
     const r = TCDRender.kindOf(pvt.rendererName);
     setSegmented($id('renderer-seg'), r.kind);
     $id('heat-scope-field').hidden = r.kind !== 'heat';

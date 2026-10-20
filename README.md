@@ -25,6 +25,7 @@ Les réglages sont enregistrés automatiquement dans le widget.
 
 **Consultation**
 - Tableau lisible par défaut, sans interface d'édition : en-têtes et totaux figés lors du défilement
+- Titre personnalisé (légende du tableau du DSFR), repris dans l'export Excel
 - Survol en croix (ligne et colonne) et info-bulle détaillant chaque cellule
 - Clic sur une cellule : comme un point du widget Carte, elle filtre les widgets Grist liés (« Sélectionner par » ce widget) ; un second clic ou Échap réaffiche tout. La sélection est conservée quand les données changent
 - Groupes repliés conservés d'un recalcul à l'autre ; au-delà de 1 500 lignes, bouton « Afficher les lignes restantes »
@@ -44,6 +45,7 @@ Les réglages sont enregistrés automatiquement dans le widget.
 - Tri des lignes et colonnes (libellé ou valeur), totaux activables
 - Thème clair/sombre synchronisé avec Grist
 - « Annuler » pour revenir à l'état d'ouverture de la configuration
+- Panneau de configuration redimensionnable (glisser son bord, flèches du clavier ; double-clic : largeur par défaut), largeur retenue par le navigateur
 
 Les configurations enregistrées par les versions précédentes (y compris en anglais) sont reprises automatiquement.
 

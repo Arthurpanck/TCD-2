@@ -9,6 +9,7 @@ const { el } = UI;
 const $id = id => document.getElementById(id);
 
 const DEFAULTS = {
+  title: '',
   rows: [],
   cols: [],
   vals: [],
@@ -65,6 +66,7 @@ function normalizeSettings(raw, legacy = {}) {
   s.rows = list(s.rows);
   s.cols = list(s.cols);
   s.vals = list(s.vals);
+  s.title = typeof s.title === 'string' ? s.title.slice(0, 200) : '';
   s.aggregatorName = TCDAggregators.normalizeName(s.aggregatorName);
   s.rendererName = TCDRender.normalizeName(s.rendererName);
   const ex = {};
@@ -93,6 +95,7 @@ function update(patch) {
   applyAppearance();
   scheduleSave();
   if (['subtotals', 'rowTotals', 'colTotals'].some(k => k in patch)) { refreshPivot(); return; }
+  if ('title' in patch) { applyTitle(); }
   if (state.pvt) { TCDConfig.sync(state.pvt); }
   if ('density' in patch || 'fontScale' in patch) { requestAnimationFrame(restick); }
 }
@@ -126,6 +129,19 @@ function setSaveState(kind) {
   const node = $id('save-state');
   node.className = 'save-state is-' + kind;
   node.textContent = { saving: 'Enregistrement…', saved: 'Enregistré', error: 'Non enregistré' }[kind] || '';
+}
+
+/** Titre choisi par l'utilisateur : légende (caption) du tableau du DSFR */
+function applyTitle() {
+  const out = $id('output');
+  const title = state.settings.title.trim();
+  out.classList.toggle('fr-table--no-caption', !title);
+  const table = out.querySelector('table.pvtTable');
+  if (!table) { return; }
+  let caption = table.querySelector(':scope > caption');
+  if (!title) { if (caption) { caption.remove(); } return; }
+  if (!caption) { caption = table.insertBefore(document.createElement('caption'), table.firstChild); }
+  caption.replaceChildren(el('span', {}, title));
 }
 
 function applyAppearance() {
@@ -275,6 +291,7 @@ function showResult() {
   out.classList.remove('is-message');
   out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
   TCDRender.decorate(table, { aggLabel: state.aggLabel, rowTotals: s.rowTotals, colTotals: s.colTotals, subtotals: s.subtotals, rows: pvt.rows.length, cols: pvt.cols.length });
+  applyTitle();
   if (table.dataset.styleSkipped) { UI.toast('Tableau trop grand : la carte de chaleur et les barres sont désactivées.', 'info'); }
   restoreCollapsed(table);
   applyRowLimit(table);
@@ -715,7 +732,7 @@ function exportContext() {
     pd: state.pd,
     settings: state.settings,
     aggLabel: state.aggLabel,
-    title: $id('summary').querySelector('.sum-agg') ? [...$id('summary').querySelectorAll('.sum-agg, .sum-sep, .sum-dim, .sum-x')].map(n => n.textContent).join(' ') : state.aggLabel,
+    title: state.settings.title.trim() || ($id('summary').querySelector('.sum-agg') ? [...$id('summary').querySelectorAll('.sum-agg, .sum-sep, .sum-dim, .sum-x')].map(n => n.textContent).join(' ') : state.aggLabel),
     filters: filters.length ? 'Filtres : ' + filters.join(' ; ') : '',
     numFmt: f.kind === 'percent' ? '0.0%' : f.kind === 'number' ? TCDGrist.excelFormat(f.colId) : null,
     collapsed: state.collapsed.rows,

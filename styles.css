@@ -39,7 +39,7 @@ body { margin: 0; overflow: hidden; background: var(--background-default-grey); 
 
 body.is-config { background: var(--background-alt-grey); }
 body.is-config #app {
-  grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+  grid-template-columns: var(--cfg-width, 340px) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas: "config bar" "config stage";
 }
@@ -123,6 +123,13 @@ body.is-config #stage { margin: 0 .75rem .75rem; border: 1px solid var(--border-
   font-size: var(--fs);
   line-height: 1.5;
 }
+
+/* Titre du tableau : légende du DSFR, gardée à gauche au défilement horizontal */
+.fr-table .fr-table__content table.pvtTable > caption {
+  margin: 0; padding: .75rem 0 .5rem;
+  font-size: calc(1.125rem * var(--font-scale)); line-height: 1.4;
+}
+table.pvtTable > caption > span { display: inline-block; position: sticky; left: var(--cell-px); padding: 0 var(--cell-px); }
 
 /* En-têtes figés */
 table.pvtTable thead th { position: sticky; top: 0; z-index: 2; }
@@ -238,12 +245,19 @@ table.pvtTable td.has-bar.bar-neg::after { background-color: var(--background-fl
    ========================================================================== */
 
 #config {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: var(--background-default-grey);
   border-right: 1px solid var(--border-default-grey);
 }
+/* Poignée de redimensionnement, sur le bord droit du panneau */
+.cfg-resizer { position: absolute; z-index: 6; top: 0; bottom: 0; right: -6px; width: 12px; cursor: col-resize; touch-action: none; }
+.cfg-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px; transition: background-color .15s; }
+.cfg-resizer:hover::after, .cfg-resizer:focus-visible::after, body.is-resizing .cfg-resizer::after { background-color: var(--border-action-high-blue-france); }
+.cfg-resizer:focus-visible { outline-offset: -2px; }
+body.is-resizing { cursor: col-resize; user-select: none; }
 .cfg-head {
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
   padding: .75rem 1rem;
@@ -415,6 +429,7 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
     grid-template-areas: "config" "bar" "stage";
   }
   #config { border-right: 0; border-bottom: 1px solid var(--border-default-grey); }
+  .cfg-resizer { display: none; }
   body.is-config #viewbar { margin: .5rem .5rem 0; }
   body.is-config #stage { margin: 0 .5rem .5rem; }
   td.pvtUnused { max-height: 8rem; }

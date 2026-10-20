@@ -488,6 +488,58 @@ await test('filtre : « seulement » ne garde qu’une valeur', async () => {
   await page.close();
 });
 
+await test('titre du tableau : légende du DSFR, enregistrée et reprise dans l’export Excel', async () => {
+  const page = await open({ settings: base });
+  assert(await page.locator('table.pvtTable > caption').count() === 0, 'pas de légende sans titre');
+  await page.evaluate(() => grist.__openConfig());
+  await page.fill('#table-title', 'Engagements 2022-2025');
+  await page.waitForTimeout(500);
+  assert(await page.locator('table.pvtTable > caption').textContent() === 'Engagements 2022-2025', 'légende du tableau attendue');
+  assert(!(await page.locator('#output').getAttribute('class')).includes('fr-table--no-caption'), 'fr-table--no-caption doit être retiré');
+  assert((await savedSettings(page)).title === 'Engagements 2022-2025', 'titre non enregistré');
+  await page.evaluate(() => TCDConfig.setRenderer('Carte de chaleur'));
+  await page.waitForTimeout(300);
+  assert(await page.locator('table.pvtTable > caption').count() === 1, 'titre perdu après un recalcul');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => exportXlsx())]);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(await dl.path());
+  assert(wb.worksheets[0].getCell('A1').value === 'Engagements 2022-2025', 'titre Excel : ' + wb.worksheets[0].getCell('A1').value);
+  await page.fill('#table-title', '');
+  await page.waitForTimeout(300);
+  assert(await page.locator('table.pvtTable > caption').count() === 0, 'légende retirée quand le titre est vide');
+  await page.close();
+});
+
+await test('configuration redimensionnable : glisser, clavier, limites et mémoire', async () => {
+  const page = await open({ settings: base });
+  await page.evaluate(() => grist.__openConfig());
+  const width = () => page.locator('#config').evaluate(n => n.offsetWidth);
+  const start = await width();
+  const h = await page.locator('#cfg-resizer').boundingBox();
+  await page.mouse.move(h.x + h.width / 2, h.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(h.x + 150, h.y + 200, { steps: 5 });
+  await page.mouse.up();
+  const dragged = await width();
+  assert(Math.abs(dragged - (start + 150 - h.width / 2)) <= 2, `largeur après glisser : ${dragged} (départ ${start})`);
+  await page.locator('#cfg-resizer').focus();
+  await page.keyboard.press('ArrowLeft');
+  assert(await width() === dragged - 16, 'flèche gauche : −16 px attendus');
+  const h2 = await page.locator('#cfg-resizer').boundingBox();
+  await page.mouse.move(h2.x + h2.width / 2, h2.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(5, h2.y + 200, { steps: 5 });
+  await page.mouse.up();
+  assert(await width() === 260, 'largeur minimale 260 px : ' + await width());
+  await page.reload();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => grist.__openConfig());
+  assert(await width() === 260, 'largeur non retenue après rechargement : ' + await width());
+  await page.dblclick('#cfg-resizer');
+  assert(await width() === 340, 'double-clic : largeur par défaut attendue');
+  await page.close();
+});
+
 await test('densité : pas de recalcul du tableau', async () => {
   const page = await open({ settings: base });
   const before = await page.evaluate(() => { window.__t = document.querySelector('table.pvtTable'); update({ density: 'compact' }); return 1; });
