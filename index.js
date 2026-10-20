@@ -49,6 +49,7 @@ const state = {
   // Au-delà, pivotUI ne construit pas la liste de filtre d'un champ (coûteux) : elle est construite à la demande
   menuLimit: MENU_LIMIT,
   aggLabel: '',
+  building: false,
   saveTimer: null,
   savePending: false,
 };
@@ -261,6 +262,11 @@ function showResult() {
     return showMessage('grid', "Ce tableau croisé n'est pas encore configuré",
       'Pour le construire, cliquez sur « Ouvrir la configuration » dans le panneau de droite de Grist (onglet du widget).');
   }
+  if (out.querySelector('.pvtRendererArea > .tcd-no-data')) {
+    renderSummary(s);
+    return showMessage('filter', 'Aucune ligne ne correspond aux filtres',
+      'Modifiez ou supprimez les filtres (bouton « filtres » de la barre ci-dessus, ou dans la configuration).');
+  }
   const table = out.querySelector('.pvtRendererArea > table.pvtTable');
   if (!table) {
     renderSummary(s);
@@ -269,6 +275,7 @@ function showResult() {
   out.classList.remove('is-message');
   out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
   TCDRender.decorate(table, { aggLabel: state.aggLabel, rowTotals: s.rowTotals, colTotals: s.colTotals, rows: pvt.rows.length, cols: pvt.cols.length });
+  if (table.dataset.styleSkipped) { UI.toast('Tableau trop grand : la carte de chaleur et les barres sont désactivées.', 'info'); }
   restoreCollapsed(table);
   applyRowLimit(table);
   TCDRender.stick(table);
@@ -350,7 +357,7 @@ function indexColumns(table) {
 }
 
 // ---------------------------------------------------------------------------
-// Interactions sur le tableau : survol, info-bulle, détail
+// Interactions sur le tableau : survol, info-bulle, sélection
 // ---------------------------------------------------------------------------
 
 /**
@@ -549,7 +556,7 @@ function showAllRows() {
   restick();
 }
 
-/** Navigation au clavier : flèches entre les cellules, Entrée pour le détail */
+/** Navigation au clavier : flèches entre les cellules, Entrée pour sélectionner */
 function onTableKey(e) {
   const table = $id('output').querySelector('table.pvtTable');
   if (!table || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Home', 'End'].includes(e.key)) { return; }
@@ -679,71 +686,43 @@ function openDisplayMenu(anchor) {
   UI.openPopover(anchor, root, { align: 'end' });
 }
 
-function exportMatrix() {
-  const pd = state.pd;
-  if (!pd) { return null; }
-  const rowKeys = pd.getRowKeys(), colKeys = pd.getColKeys();
-  const cks = colKeys.length ? colKeys : [[]];
-  const withRowTotal = colKeys.length > 0 && state.settings.rowTotals;
-  const value = (rk, ck) => pd.getAggregator(rk, ck).value();
-  const header = [...pd.rowAttrs,
-    ...(colKeys.length ? colKeys.map(k => k.join(' / ')) : [state.aggLabel]),
-    ...(withRowTotal ? ['Total'] : [])];
-  const rows = [header];
-  for (const rk of (rowKeys.length ? rowKeys : [[]])) {
-    if (!pd.rowAttrs.length) { break; }
-    rows.push([...rk, ...cks.map(ck => value(rk, ck)), ...(withRowTotal ? [value(rk, [])] : [])]);
-  }
-  if (state.settings.colTotals || !pd.rowAttrs.length) {
-    const label0 = pd.rowAttrs.length ? ['Total', ...pd.rowAttrs.slice(1).map(() => '')] : [];
-    rows.push([...label0, ...cks.map(ck => value([], ck)), ...(withRowTotal ? [value([], [])] : [])]);
-  }
-  return rows;
-}
-
-function toDelimited(rows, sep) {
-  const cell = v => {
-    if (v === null || v === undefined) { return ''; }
-    if (typeof v === 'number') { return isFinite(v) ? String(v).replace('.', ',') : ''; }
-    const s = String(v);
-    return /[";\t\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+/** Ce que les exports doivent savoir du tableau affiché */
+function exportContext() {
+  const pvt = state.pvt;
+  const ds = state.dataset;
+  const f = TCDAggregators.formatOf(pvt.aggregatorName, pvt.vals, name => ds.fromAttr(name).split(' › ')[0]);
+  const filters = Object.entries(pvt.exclusions || {}).filter(([, v]) => v.length)
+    .map(([a, v]) => `${a} sans ${v.slice(0, 5).join(', ')}${v.length > 5 ? '…' : ''}`);
+  return {
+    pd: state.pd,
+    settings: state.settings,
+    aggLabel: state.aggLabel,
+    title: $id('summary').querySelector('.sum-agg') ? [...$id('summary').querySelectorAll('.sum-agg, .sum-sep, .sum-dim, .sum-x')].map(n => n.textContent).join(' ') : state.aggLabel,
+    filters: filters.length ? 'Filtres : ' + filters.join(' ; ') : '',
+    numFmt: f.kind === 'percent' ? '0.0%' : f.kind === 'number' ? TCDGrist.excelFormat(f.colId) : null,
+    collapsed: state.collapsed.rows,
+    renderer: TCDRender.kindOf(state.settings.rendererName),
+    accent: TCDRender.themeRgb('--accent-base'),
   };
-  return rows.map(r => r.map(cell).join(sep)).join('\r\n');
 }
 
-async function copyTable() {
-  const rows = exportMatrix();
-  if (!rows) { return; }
-  const text = toDelimited(rows, '\t');
+async function exportXlsx() {
+  UI.toast('Préparation du classeur Excel…', 'info');
   try {
-    await navigator.clipboard.writeText(text);
+    await TCDExport.xlsx(exportContext());
   } catch (e) {
-    const ta = el('textarea', { style: 'position:fixed;opacity:0' });
-    ta.value = text;
-    document.body.append(ta);
-    ta.select();
-    document.execCommand('copy');
-    ta.remove();
+    console.error(e);
+    UI.toast("Export Excel impossible (bibliothèque non chargée). Utilisez l'export CSV.", 'error');
   }
-  UI.toast('Tableau copié : collez-le dans un tableur ou un courriel.', 'success');
-}
-
-function downloadCsv() {
-  const rows = exportMatrix();
-  if (!rows) { return; }
-  const blob = new Blob(['﻿' + toDelimited(rows, ';')], { type: 'text/csv;charset=utf-8' });
-  const a = el('a', { href: URL.createObjectURL(blob), download: 'tableau-croise.csv' });
-  document.body.append(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
 function openExportMenu(anchor) {
   if (UI.isOpenFor(anchor)) { return UI.closePopover(); }
   if (!state.pd) { return UI.toast("Rien à exporter : configurez d'abord le tableau.", 'info'); }
   UI.openPopover(anchor, UI.menu([
-    { icon: 'copy', label: 'Copier (pour Excel / LibreOffice)', onClick: copyTable },
-    { icon: 'download', label: 'Télécharger en CSV', onClick: downloadCsv },
+    { icon: 'download', label: 'Excel mis en forme (.xlsx)', onClick: exportXlsx },
+    { icon: 'download', label: 'CSV, données brutes', onClick: () => TCDExport.csv(exportContext()) },
+    { icon: 'copy', label: 'Copier (données brutes)', onClick: () => TCDExport.copy(exportContext()).then(() => UI.toast('Tableau copié : collez-le dans un tableur ou un courriel.', 'success')) },
     { icon: 'printer', label: 'Imprimer', onClick: () => window.print() },
   ], 'Exporter le tableau'), { align: 'end' });
 }
@@ -755,14 +734,9 @@ function openExportMenu(anchor) {
 function openConfig() {
   // Recharge les formats et libellés : ils ont pu changer dans Grist depuis l'ouverture
   const before = TCDGrist.signature();
-  Promise.resolve(grist.getSelectedTableId ? grist.getSelectedTableId() : null)
-    .then(tableId => TCDGrist.load(tableId))
-    .then(() => {
-      if (TCDGrist.signature() !== before && state.rawRecords) {
-        state.dataset = TCDData.prepare(state.rawRecords);
-        build();
-      }
-    });
+  loadColumns().then(() => {
+    if (TCDGrist.signature() !== before && state.rawRecords) { loadRecords(state.rawRecords); }
+  });
   if (!state.configOpen) {
     state.configOpen = true;
     state.snapshot = JSON.parse(JSON.stringify(state.settings));
@@ -796,6 +770,17 @@ function revert() {
 // ---------------------------------------------------------------------------
 // Liaison avec Grist
 // ---------------------------------------------------------------------------
+
+/** Formats et libellés des colonnes de la table liée (accès complet uniquement) */
+function loadColumns() {
+  return Promise.resolve(grist.getSelectedTableId ? grist.getSelectedTableId() : null).then(tableId => TCDGrist.load(tableId));
+}
+
+function loadRecords(records) {
+  state.rawRecords = records;
+  state.dataset = TCDData.prepare(records);
+  build();
+}
 
 /** Construit les listes de filtre de tous les champs, même très longues, puis rouvre celle demandée */
 function showAllFilterValues(attr) {
@@ -858,14 +843,9 @@ function start() {
   let columnsLoaded = null;
   grist.onRecords(async records => {
     // Formats et libellés des colonnes Grist (une fois, avant le premier affichage)
-    if (!columnsLoaded) {
-      columnsLoaded = Promise.resolve(grist.getSelectedTableId ? grist.getSelectedTableId() : null)
-        .then(tableId => TCDGrist.load(tableId));
-    }
+    columnsLoaded = columnsLoaded || loadColumns();
     await columnsLoaded;
-    state.rawRecords = records;
-    state.dataset = TCDData.prepare(records);
-    build();
+    loadRecords(records);
   });
 }
 

@@ -119,18 +119,29 @@ const TCDAggregators = (function () {
     'Minimum', 'Maximum', 'Premier', 'Dernier', 'Écart-type']);
 
   /**
+   * Format d'affichage d'un calcul : pourcentage, liste, ou format de nombre d'une colonne Grist
+   * (colId null : format par défaut de Grist). Partagé par l'affichage et l'export Excel.
+   * @param {(name: string) => string} colIdOf - nom de champ affiché → identifiant de colonne Grist
+   * @returns {{kind: 'percent'|'list'|'number', colId?: string|null}}
+   */
+  function formatOf(name, vals, colIdOf) {
+    const k = kind(name);
+    if (k === 'percent' || k === 'list') { return { kind: k }; }
+    return { kind: 'number', colId: KEEPS_COLUMN_FORMAT.has(name) && vals && vals[0] ? colIdOf(vals[0]) : null };
+  }
+
+  /**
    * Agrégateurs transmis à pivotUI : ceux de la librairie, avec le format de nombre de la colonne Grist
    * (devise, pourcentage, décimales…) ou, à défaut, le format par défaut de Grist.
-   * @param {(name: string) => string} colIdOf - nom de champ affiché → identifiant de colonne Grist
    */
   function forUI(colIdOf) {
     const out = {};
     for (const name of Object.keys(catalogue)) {
-      const k = kind(name);
       out[name] = vals => {
         const base = catalogue[name](vals);
-        if (k === 'percent' || k === 'list') { return base; }
-        const formatter = TCDGrist.formatter(KEEPS_COLUMN_FORMAT.has(name) && vals && vals[0] ? colIdOf(vals[0]) : null);
+        const f = formatOf(name, vals, colIdOf);
+        if (f.kind !== 'number') { return base; }
+        const formatter = TCDGrist.formatter(f.colId);
         return (data, rowKey, colKey) => {
           const agg = base(data, rowKey, colKey);
           agg.format = formatter;
@@ -157,5 +168,5 @@ const TCDAggregators = (function () {
     return `${label} de ${L(v[0])}`;
   }
 
-  return { GROUPS, LABELS, normalizeName, inputLabels, forUI, describe };
+  return { GROUPS, LABELS, normalizeName, inputLabels, formatOf, forUI, describe };
 })();

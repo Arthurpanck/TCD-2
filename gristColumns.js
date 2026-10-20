@@ -93,6 +93,12 @@ const TCDGrist = (function () {
     return new Intl.NumberFormat(locale(), nf);
   }
 
+  /** Options de nombre d'une colonne Grist ({} : format par défaut) */
+  function columnOptions(colId) {
+    const col = meta.columns[colId];
+    return col && (col.type === 'Numeric' || col.type === 'Int') ? col.options : {};
+  }
+
   /**
    * Formateur de nombres d'une colonne (ou format par défaut de Grist si colId est vide).
    * @returns {(x: any) => string}
@@ -100,8 +106,7 @@ const TCDGrist = (function () {
   function formatter(colId) {
     const key = colId || '';
     if (cache.has(key)) { return cache.get(key); }
-    const col = meta.columns[colId];
-    const options = col && (col.type === 'Numeric' || col.type === 'Int') ? col.options : {};
+    const options = columnOptions(colId);
     const nf = buildNumberFormat(options);
     const parens = options.numSign === 'parens' && options.numMode !== 'scientific';
     const fn = x => {
@@ -114,6 +119,30 @@ const TCDGrist = (function () {
     return fn;
   }
 
+  /**
+   * Même format, traduit en format de nombre Excel (export .xlsx), à partir des options
+   * résolues du formateur : décimales, séparateur de milliers, devise et sa position.
+   */
+  function excelFormat(colId) {
+    const options = columnOptions(colId);
+    const nf = buildNumberFormat(options);
+    const r = nf.resolvedOptions();
+    if (options.numMode === 'scientific') { return '0.00E+00'; }
+    // Format par défaut de Grist sans décimales imposées : nombre brut
+    if (!options.numMode && options.decimals == null && options.maxDecimals == null) { return 'General'; }
+    const min = r.minimumFractionDigits || 0, max = Math.max(min, Math.min(r.maximumFractionDigits || 0, 10));
+    const frac = max ? '.' + '0'.repeat(min) + '#'.repeat(max - min) : '';
+    let fmt = (r.useGrouping ? '#,##0' : '0') + frac;
+    if (r.style === 'percent') { fmt += '%'; }
+    if (r.style === 'currency') {
+      const parts = nf.formatToParts(1);
+      const symbol = (parts.find(p => p.type === 'currency') || {}).value || r.currency;
+      const before = parts.findIndex(p => p.type === 'currency') < parts.findIndex(p => p.type === 'integer');
+      fmt = before ? `"${symbol}"${fmt}` : `${fmt} "${symbol}"`;
+    }
+    return options.numSign === 'parens' ? `${fmt};(${fmt})` : fmt;
+  }
+
   /** Libellé Grist d'une colonne, ou null si inconnu */
   function label(colId) {
     const col = meta.columns[colId];
@@ -123,5 +152,5 @@ const TCDGrist = (function () {
   /** Empreinte des métadonnées, pour savoir si les libellés ou formats ont changé */
   const signature = () => JSON.stringify(meta);
 
-  return { load, formatter, label, signature, isAvailable: () => meta.available };
+  return { load, formatter, excelFormat, label, signature, isAvailable: () => meta.available };
 })();

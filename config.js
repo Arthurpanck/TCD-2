@@ -30,11 +30,7 @@ const TCDConfig = (function () {
 
     $id('swap-axes').innerHTML = Icons.svg('swap', 15);
     $id('swap-axes').addEventListener('click', swapAxes);
-    $id('clear-filters').addEventListener('click', () => {
-      $('#filter-layer input.pvtFilter').prop('checked', true);
-      $host.find('.pvtFilteredAttribute').removeClass('pvtFilteredAttribute');
-      app.refreshPivot();
-    });
+    $id('clear-filters').addEventListener('click', () => clearFilter(null));
     $id('field-search').addEventListener('input', filterFieldList);
     $id('cfg-done').addEventListener('click', () => app.closeConfig());
     $id('cfg-revert').addEventListener('click', () => app.revert());
@@ -90,6 +86,7 @@ const TCDConfig = (function () {
     $('#slot-cols').append(ui.find('td.pvtCols').removeClass('pvtHorizList'));
     $('#slot-row-order').append(ui.find('a.pvtRowOrder').addClass('btn order-btn'));
     $('#slot-col-order').append(ui.find('a.pvtColOrder').addClass('btn order-btn'));
+    host.find('a.order-btn').on('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } });
     $('#slot-vals').append(ui.find('td.pvtVals'));
     $('#slot-renderer').append(ui.find('select.pvtRenderer').closest('td'));
     $('#output').append(ui.find('td.pvtRendererArea'));
@@ -283,11 +280,11 @@ const TCDConfig = (function () {
     if (search) { search.focus({ preventScroll: true }); }
   }
 
+  /** Supprime le filtre d'un champ (ou de tous si attr est null) en recochant ses valeurs dans pivotUI */
   function clearFilter(attr) {
-    const li = liOf(attr);
-    if (!li.length) { return; }
-    $(boxOf(li[0])).find('input.pvtFilter').prop('checked', true);
-    li.removeClass('pvtFilteredAttribute');
+    const lis = attr === null ? $host.find('.pvtAxisContainer li') : liOf(attr);
+    lis.each((_i, li) => { $(boxOf(li)).find('input.pvtFilter').prop('checked', true); });
+    lis.removeClass('pvtFilteredAttribute');
     app.refreshPivot();
   }
 

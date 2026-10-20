@@ -1,6 +1,7 @@
 // Tests de bout en bout du widget avec une API Grist simulée.
 // Usage : npx http-server -p 8765 . &  puis  node dev/test.mjs
 import { chromium } from 'playwright';
+import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -361,10 +362,54 @@ await test('filtre d’un champ à plus de 1 000 valeurs (liste construite à la
 
 await test('export : la matrice reprend les totaux du tableau', async () => {
   const page = await open({ settings: base });
-  const rows = await page.evaluate(() => exportMatrix());
+  const rows = await page.evaluate(() => TCDExport.matrix(exportContext()));
   assert(rows[0].join('|') === 'Region|2022|2023|2024|2025|Total', 'en-tête : ' + rows[0].join('|'));
   const last = rows[rows.length - 1];
   assert(last[0] === 'Total' && last[last.length - 1] === 48283695, 'ligne total : ' + last.join('|'));
+  await page.close();
+});
+
+await test('export Excel : formats Grist, sous-totaux en plan, totaux en gras, en-têtes', async () => {
+  const meta = {
+    documentSettings: { locale: 'fr-FR', currency: 'EUR' },
+    columns: { Montant: { label: 'Montant engagé', type: 'Numeric', options: { numMode: 'currency', decimals: 0, maxDecimals: 0 } } },
+  };
+  const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'], rendererName: 'Carte de chaleur' } }, { meta });
+  await page.locator('tbody th.pvtRowLabel.rowcol0').nth(1).click();
+  await page.waitForTimeout(150);
+  await page.click('#btn-export');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.menu-item:has-text("Excel")')]);
+  assert(dl.suggestedFilename() === 'tableau-croise.xlsx', 'nom : ' + dl.suggestedFilename());
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(await dl.path());
+  const ws = wb.worksheets[0];
+  const find = text => { let hit = null; ws.eachRow((row, r) => row.eachCell((c, k) => { if (!hit && c.value === text) { hit = { r, k, cell: c, row }; } })); return hit; };
+  const ara = find('Auvergne-Rhône-Alpes');
+  assert(ara && ara.row.font === undefined || ara.cell.font.bold, 'groupe en gras attendu');
+  const sub = ws.getRow(ara.r).getCell(3);
+  assert(sub.value === 1619058 || typeof sub.value === 'number', 'sous-total numérique attendu : ' + sub.value);
+  assert(/€/.test(sub.numFmt) && /#,##0/.test(sub.numFmt), 'format devise Grist non repris : ' + sub.numFmt);
+  const child = ws.getRow(ara.r + 1);
+  assert(child.outlineLevel === 1 && ws.getRow(ara.r).outlineLevel === 0, 'plan Excel (groupes) absent');
+  const bre = find('Bretagne');
+  assert(ws.getRow(bre.r + 1).hidden === true, 'groupe replié dans le widget : lignes masquées attendues dans Excel');
+  const total = find('Total');
+  assert(total && ws.getRow(total.r).getCell(2).font.bold, 'ligne Total en gras attendue');
+  assert(find('Annee →'), 'en-tête de colonnes absent');
+  assert(ws.conditionalFormattings.length > 0 && ws.conditionalFormattings[0].rules[0].type === 'colorScale', 'carte de chaleur non reprise');
+  assert(ws.views[0].state === 'frozen', 'volets figés attendus');
+  assert(page.errors.length === 0, page.errors.join(' | '));
+  await page.close();
+});
+
+await test('filtres qui ne laissent aucune ligne : message, puis retour au tableau', async () => {
+  const page = await open({ settings: { ...base, rows: ['Region', 'Statut'], exclusions: { Statut: ['Instruit', 'Engagé', 'Payé', 'Refusé'] } } });
+  assert((await page.locator('.empty h3').textContent()).includes('Aucune ligne'), 'message attendu');
+  assert(page.errors.length === 0, page.errors.join(' | '));
+  await page.click('.sum-filters');
+  await page.click('.popover .filter-pill-clear');
+  await page.waitForTimeout(300);
+  assert(await page.locator('table.pvtTable').count() === 1, 'le tableau doit revenir');
   await page.close();
 });
 

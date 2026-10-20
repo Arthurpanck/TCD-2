@@ -31,7 +31,8 @@ Les réglages sont enregistrés automatiquement dans le widget.
 - Mise en forme : tableau, carte de chaleur (globale, par ligne, par colonne) ou barres de données
 - Nombres au format de la colonne dans Grist (devise, pourcentage, décimales, séparateurs)
 - Densité (compacte, standard, aérée) et taille du texte
-- Export : copie pour Excel / LibreOffice, CSV (séparateur « ; », compatible Excel français), impression
+- Export Excel mis en forme (.xlsx) : formats de nombres des colonnes Grist (devise, %, décimales), sous-totaux en plan repliable (groupes repliés dans le widget repliés dans Excel), totaux en gras, en-têtes et volets figés, carte de chaleur et barres en mise en forme conditionnelle
+- Export des données brutes : copie pour un tableur, CSV (séparateur « ; », compatible Excel français) ; impression
 
 **Configuration** (bouton « Ouvrir la configuration » de Grist)
 - Champs typés (texte, nombre, date) avec recherche
@@ -50,7 +51,7 @@ Le widget ne nécessite aucune compilation. Pour le tester hors de Grist, une AP
 
 ```bash
 npx http-server -p 8765 .
-npm install --no-save playwright   # si Playwright n'est pas déjà installé
+npm install --no-save playwright exceljs   # outils de test (Playwright, lecture des exports Excel)
 node dev/test.mjs                  # tests de bout en bout
 ```
 
@@ -58,7 +59,8 @@ Organisation du code :
 
 | Fichier | Rôle |
 | --- | --- |
-| `index.js` | Réglages, construction de pivotUI, liaison avec Grist, sélection, export |
+| `index.js` | Réglages, construction de pivotUI, liaison avec Grist, sélection |
+| `export.js` | Exports : Excel mis en forme (ExcelJS, chargé à la demande), CSV, copie |
 | `config.js` | Place et habille les éléments de pivotUI dans le panneau de configuration |
 | `render.js` | Rendus subtotal.js (tableau, chaleur, barres) et mise en forme du tableau |
 | `gristColumns.js` | Formats et libellés des colonnes Grist (logique de formatage de Grist) |

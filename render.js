@@ -20,6 +20,8 @@ const TCDRender = (function () {
   const kindOf = name => { const [kind, scope] = KINDS[normalizeName(name)]; return { kind, scope }; };
   const nameOf = (kind, scope) => Object.keys(KINDS).find(n => KINDS[n][0] === kind && (kind !== 'heat' || KINDS[n][1] === scope)) || 'Table';
   const subtotalTable = $.pivotUtilities.subtotal_renderers['Table With Subtotal'];
+  // Au-delà, heatmap et barchart de pivottable dépassent la pile d'appels (sélections jQuery géantes)
+  const STYLE_LIMIT = 50000;
 
   /** Couleur d'une variable CSS du thème courant (rgb) */
   function themeRgb(name) {
@@ -37,7 +39,10 @@ const TCDRender = (function () {
   /** Échelle de couleur de la carte de chaleur (option `heatmap.colorScaleGenerator` de pivottable) */
   function colorScaleGenerator(values) {
     const surface = themeRgb('--surface'), accent = themeRgb('--accent-base');
-    const min = Math.min(...values), max = Math.max(...values), range = max - min;
+    // Boucle plutôt que Math.min(...values) : un grand tableau dépasserait la pile d'appels
+    let min = Infinity, max = -Infinity;
+    for (const v of values) { if (v < min) { min = v; } if (v > max) { max = v; } }
+    const range = max - min;
     return x => {
       const t = range ? (x - min) / range : 0.5;
       const p = t * 0.78 + 0.04;
@@ -71,9 +76,18 @@ const TCDRender = (function () {
   function renderers(hooks) {
     const make = post => (pd, opts) => {
       hooks.onPivotData(pd);
+      strongColors.clear();
+      // subtotal.js échoue quand les filtres ne laissent aucune ligne : on le signale sans l'appeler
+      if ((pd.rowAttrs.length && !pd.getRowKeys().length) || (pd.colAttrs.length && !pd.getColKeys().length)) {
+        return $('<div class="tcd-no-data">');
+      }
       const o = $.extend(true, {}, opts, hooks.options(), { heatmap: { colorScaleGenerator } });
       const table = subtotalTable(pd, o);
-      if (post) { onDetailCells(table, pd.colAttrs.length > 0, $t => post($t, o)); }
+      if (post && pd.getRowKeys().length * Math.max(1, pd.getColKeys().length) > STYLE_LIMIT) {
+        table.dataset.styleSkipped = '1';
+      } else if (post) {
+        onDetailCells(table, pd.colAttrs.length > 0, $t => post($t, o));
+      }
       return table;
     };
     return {
@@ -169,5 +183,5 @@ const TCDRender = (function () {
     });
   }
 
-  return { normalizeName, kindOf, nameOf, renderers, decorate, stick, headerText };
+  return { normalizeName, kindOf, nameOf, themeRgb, renderers, decorate, stick, headerText };
 })();
