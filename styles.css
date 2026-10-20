@@ -124,13 +124,6 @@ body.is-config #stage { margin: 0 .75rem .75rem; border: 1px solid var(--border-
   line-height: 1.5;
 }
 
-/* Titre du tableau : légende du DSFR, gardée à gauche au défilement horizontal */
-.fr-table .fr-table__content table.pvtTable > caption {
-  margin: 0; padding: .75rem 0 .5rem;
-  font-size: calc(1.125rem * var(--font-scale)); line-height: 1.4;
-}
-table.pvtTable > caption > span { display: inline-block; position: sticky; left: var(--cell-px); padding: 0 var(--cell-px); }
-
 /* En-têtes figés */
 table.pvtTable thead th { position: sticky; top: 0; z-index: 2; }
 table.pvtTable thead th.pvtAxisLabel { z-index: 4; color: var(--text-mention-grey); font-size: calc(var(--fs) * .85); text-transform: uppercase; letter-spacing: .04em; }

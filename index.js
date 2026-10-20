@@ -95,7 +95,7 @@ function update(patch) {
   applyAppearance();
   scheduleSave();
   if (['subtotals', 'rowTotals', 'colTotals'].some(k => k in patch)) { refreshPivot(); return; }
-  if ('title' in patch) { applyTitle(); }
+  if ('title' in patch) { applyTitle(); renderSummary(state.settings); }
   if (state.pvt) { TCDConfig.sync(state.pvt); }
   if ('density' in patch || 'fontScale' in patch) { requestAnimationFrame(restick); }
 }
@@ -131,17 +131,19 @@ function setSaveState(kind) {
   node.textContent = { saving: 'Enregistrement…', saved: 'Enregistré', error: 'Non enregistré' }[kind] || '';
 }
 
-/** Titre choisi par l'utilisateur : légende (caption) du tableau du DSFR */
+/**
+ * Titre choisi par l'utilisateur : affiché dans la barre de résumé, et légende (caption) du tableau,
+ * masquée à l'écran mais lue par les lecteurs d'écran (variante fr-table--no-caption du DSFR)
+ */
 function applyTitle() {
   const out = $id('output');
   const title = state.settings.title.trim();
-  out.classList.toggle('fr-table--no-caption', !title);
   const table = out.querySelector('table.pvtTable');
   if (!table) { return; }
   let caption = table.querySelector(':scope > caption');
   if (!title) { if (caption) { caption.remove(); } return; }
   if (!caption) { caption = table.insertBefore(document.createElement('caption'), table.firstChild); }
-  caption.replaceChildren(el('span', {}, title));
+  caption.textContent = title;
 }
 
 function applyAppearance() {
@@ -316,14 +318,20 @@ function renderSummary(s) {
   const pvt = state.pvt;
   const parts = [];
   if (pvt && isConfigured(s)) {
-    parts.push(el('span', { class: 'sum-agg' }, state.aggLabel));
     const dims = [pvt.rows.join(', '), pvt.cols.join(', ')].filter(Boolean);
-    if (dims.length) {
-      parts.push(el('span', { class: 'sum-sep' }, 'par'));
-      dims.forEach((d, i) => {
-        if (i) { parts.push(el('span', { class: 'sum-x' }, '×')); }
-        parts.push(el('span', { class: 'sum-dim' }, d));
-      });
+    const title = s.title.trim();
+    if (title) {
+      // Le titre remplace la description automatique, gardée en info-bulle
+      parts.push(el('span', { class: 'sum-agg', title: [state.aggLabel, dims.join(' × ')].filter(Boolean).join(' par ') }, title));
+    } else {
+      parts.push(el('span', { class: 'sum-agg' }, state.aggLabel));
+      if (dims.length) {
+        parts.push(el('span', { class: 'sum-sep' }, 'par'));
+        dims.forEach((d, i) => {
+          if (i) { parts.push(el('span', { class: 'sum-x' }, '×')); }
+          parts.push(el('span', { class: 'sum-dim' }, d));
+        });
+      }
     }
   } else {
     parts.push(el('span', { class: 'sum-agg' }, 'Tableau croisé dynamique'));

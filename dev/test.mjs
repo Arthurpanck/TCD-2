@@ -488,14 +488,16 @@ await test('filtre : « seulement » ne garde qu’une valeur', async () => {
   await page.close();
 });
 
-await test('titre du tableau : légende du DSFR, enregistrée et reprise dans l’export Excel', async () => {
+await test('titre du tableau : barre de résumé, légende pour lecteurs d’écran, export Excel', async () => {
   const page = await open({ settings: base });
   assert(await page.locator('table.pvtTable > caption').count() === 0, 'pas de légende sans titre');
   await page.evaluate(() => grist.__openConfig());
   await page.fill('#table-title', 'Engagements 2022-2025');
   await page.waitForTimeout(500);
   assert(await page.locator('table.pvtTable > caption').textContent() === 'Engagements 2022-2025', 'légende du tableau attendue');
-  assert(!(await page.locator('#output').getAttribute('class')).includes('fr-table--no-caption'), 'fr-table--no-caption doit être retiré');
+  assert(await page.locator('#summary .sum-agg').textContent() === 'Engagements 2022-2025', 'le titre doit remplacer la description dans la barre');
+  assert(await page.locator('#summary .sum-dim').count() === 0, 'description automatique masquée quand un titre existe');
+  assert(!(await page.locator('table.pvtTable > caption').isVisible()), 'légende masquée à l’écran (lue par les lecteurs d’écran)');
   assert((await savedSettings(page)).title === 'Engagements 2022-2025', 'titre non enregistré');
   await page.evaluate(() => TCDConfig.setRenderer('Carte de chaleur'));
   await page.waitForTimeout(300);

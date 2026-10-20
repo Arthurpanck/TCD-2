@@ -25,7 +25,7 @@ Les réglages sont enregistrés automatiquement dans le widget.
 
 **Consultation**
 - Tableau lisible par défaut, sans interface d'édition : en-têtes et totaux figés lors du défilement
-- Titre personnalisé (légende du tableau du DSFR), repris dans l'export Excel
+- Titre personnalisé : remplace la description automatique dans la barre de résumé, légende du tableau pour les lecteurs d'écran, repris dans l'export Excel
 - Survol en croix (ligne et colonne) et info-bulle détaillant chaque cellule
 - Clic sur une cellule : comme un point du widget Carte, elle filtre les widgets Grist liés (« Sélectionner par » ce widget) ; un second clic ou Échap réaffiche tout. La sélection est conservée quand les données changent
 - Groupes repliés conservés d'un recalcul à l'autre ; au-delà de 1 500 lignes, bouton « Afficher les lignes restantes »
