@@ -24,7 +24,6 @@ const TCDConfig = (function () {
     $id('row-totals').addEventListener('change', e => app.update({ rowTotals: e.target.checked }));
     $id('col-totals').addEventListener('change', e => app.update({ colTotals: e.target.checked }));
     $id('subtotals').addEventListener('change', e => app.update({ subtotals: e.target.checked }));
-    $id('click-detail').addEventListener('change', e => app.update({ clickDetail: e.target.checked }));
     $id('heat-scope').addEventListener('change', e => setRenderer(TCDRender.nameOf('heat', e.target.value)));
     segmented($id('renderer-seg'), v => setRenderer(TCDRender.nameOf(v, $id('heat-scope').value)));
     segmented($id('density-seg'), v => app.update({ density: v }));
@@ -81,8 +80,10 @@ const TCDConfig = (function () {
     const unused = ui.find('td.pvtUnused');
 
     // Chaque fenêtre de filtre suit la puce du même rang (classe axis_N)
-    unused.children('.pvtFilterBox').each((i, box) => { box.dataset.axis = i; decorateFilterBox(box); });
-    $('#filter-layer').append(unused.children('.pvtFilterBox'));
+    // (habillées hors du document : chaque insertion dans le tableau d'interface coûte un recalcul de style)
+    const boxes = unused.children('.pvtFilterBox').detach();
+    boxes.each((i, box) => { box.dataset.axis = i; decorateFilterBox(box); });
+    $('#filter-layer').append(boxes);
 
     $('#slot-unused').append(unused.removeClass('pvtVertList pvtHorizList'));
     $('#slot-rows').append(ui.find('td.pvtRows'));
@@ -218,18 +219,34 @@ const TCDConfig = (function () {
     const final = box.querySelectorAll(':scope > p:last-child button');
     final.forEach((b, i) => b.classList.add('btn', i === 0 && final.length > 1 ? 'btn-primary' : 'btn-ghost'));
     box.querySelectorAll('span.count').forEach(s => { s.textContent = s.textContent.replace(/[()]/g, ''); });
-    // « seulement » : ne garde que cette valeur, en marquant les cases modifiées comme le fait pivotUI
+    // Trop de valeurs : pivotUI n'a pas construit la liste, on propose de la construire
+    if (!box.querySelector('.pvtCheckContainer')) {
+      const attr = box.querySelector('h4 > span').textContent;
+      box.querySelector('h4').after(el('p', { class: 'fp-many' },
+        'Ce champ a beaucoup de valeurs : leur liste n’est construite qu’à la demande.',
+        el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => app.showAllFilterValues(attr) }, 'Afficher toutes les valeurs')));
+      box.querySelectorAll(':scope > p:not(.fp-many)').forEach(p => { if (!p.querySelector('button')) { p.remove(); } });
+    }
+  }
+
+  /**
+   * « seulement » : ne garde que cette valeur, en marquant les cases modifiées comme le fait pivotUI.
+   * Ajouté à la première ouverture : à la construction, chaque insertion dans ces listes est très lente.
+   */
+  function addOnlyButtons(box) {
+    if (box.dataset.decorated) { return; }
+    box.dataset.decorated = '1';
     const inputs = [...box.querySelectorAll('input.pvtFilter')];
     box.querySelectorAll('.pvtCheckContainer label').forEach(label => {
       const own = label.querySelector('input.pvtFilter');
       if (label.querySelector('.value').textContent === TCDData.EMPTY) { label.classList.add('is-empty'); }
-      label.querySelector('.value').after(el('button', {
+      label.insertBefore(el('button', {
         type: 'button', class: 'fp-only', title: 'Ne garder que cette valeur',
         onclick: e => {
           e.preventDefault();
           inputs.forEach(i => { if (i.checked !== (i === own)) { i.checked = i === own; $(i).toggleClass('changed'); } });
         },
-      }, 'seulement'));
+      }, 'seulement'), label.querySelector('.count'));
     });
   }
 
@@ -254,6 +271,7 @@ const TCDConfig = (function () {
   function placeFilterBox(e) {
     const box = boxOf(e.currentTarget.closest('li'));
     const visible = el => el && el.isConnected && el.getClientRects().length > 0;
+    addOnlyButtons(box);
     const anchor = visible(pendingAnchor) ? pendingAnchor : e.currentTarget;
     pendingAnchor = null;
     document.querySelectorAll('#filter-layer .pvtFilterBox').forEach(b => { if (b !== box) { b.style.display = 'none'; } });
@@ -344,7 +362,6 @@ const TCDConfig = (function () {
     $id('row-totals').checked = s.rowTotals;
     $id('col-totals').checked = s.colTotals;
     $id('subtotals').checked = s.subtotals;
-    $id('click-detail').checked = s.clickDetail;
     setSegmented($id('density-seg'), s.density);
     $id('format-hint').textContent = TCDGrist.isAvailable()
       ? 'Les nombres reprennent le format de la colonne dans Grist.'

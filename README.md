@@ -24,7 +24,8 @@ Les réglages sont enregistrés automatiquement dans le widget.
 **Consultation**
 - Tableau lisible par défaut, sans interface d'édition : en-têtes et totaux figés lors du défilement
 - Survol en croix (ligne et colonne) et info-bulle détaillant chaque cellule
-- Clic sur une cellule : ses lignes sont transmises aux widgets Grist liés (« Sélectionner par » ce widget) et, si l'option est active, affichées dans un panneau de détail limité aux colonnes du tableau
+- Clic sur une cellule : comme un point du widget Carte, elle filtre les widgets Grist liés (« Sélectionner par » ce widget) ; un second clic ou Échap réaffiche tout. La sélection est conservée quand les données changent
+- Groupes repliés conservés d'un recalcul à l'autre ; au-delà de 1 500 lignes, bouton « Afficher les lignes restantes »
 - Filtres rapides depuis la barre de résumé
 - Sous-totaux par groupe (subtotal.js), repliables en cliquant sur un groupe ou sur l'en-tête d'un niveau
 - Mise en forme : tableau, carte de chaleur (globale, par ligne, par colonne) ou barres de données
@@ -57,7 +58,7 @@ Organisation du code :
 
 | Fichier | Rôle |
 | --- | --- |
-| `index.js` | Réglages, construction de pivotUI, liaison avec Grist, détail, export |
+| `index.js` | Réglages, construction de pivotUI, liaison avec Grist, sélection, export |
 | `config.js` | Place et habille les éléments de pivotUI dans le panneau de configuration |
 | `render.js` | Rendus subtotal.js (tableau, chaleur, barres) et mise en forme du tableau |
 | `gristColumns.js` | Formats et libellés des colonnes Grist (logique de formatage de Grist) |

@@ -142,18 +142,45 @@ await test('filtre de valeurs : exclusion, résumé et enregistrement', async ()
   await page.close();
 });
 
-await test('détail d’une cellule et sélection transmise aux widgets liés', async () => {
+await test('clic sur une case : filtre les vues liées (comme un point de la carte), sans panneau de détail', async () => {
+  const page = await open({ settings: { ...base, cols: ['Statut'] } });
+  const cell = page.locator(LEAF).first();
+  await cell.click();
+  await page.waitForTimeout(150);
+  const expected = await page.evaluate(() => window.__mockGrist.data.filter(r => r.Region === 'Auvergne-Rhône-Alpes' && r.Statut === 'Engagé').map(r => r.id));
+  const ids = await page.evaluate(() => window.__mockGrist.selected);
+  assert(JSON.stringify(ids) === JSON.stringify(expected), `lignes transmises : ${ids && ids.length} au lieu de ${expected.length}`);
+  assert(await page.locator('#drawer, .detail-table').count() === 0, 'aucun panneau de détail ne doit exister');
+  assert(await page.locator('td.is-selected').count() === 1, 'case non mise en évidence');
+  await cell.click();
+  assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'second clic : les vues liées doivent tout réafficher');
+  await cell.click();
+  await page.keyboard.press('Escape');
+  assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'Échap : les vues liées doivent tout réafficher');
+  await page.close();
+});
+
+await test('sans champ en colonnes : la case « Total » d’une ligne filtre aussi les vues liées', async () => {
+  const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'], cols: [] } });
+  await page.locator('tbody tr').nth(1).locator('td.rowTotal').click();
+  const expected = await page.evaluate(() => window.__mockGrist.data.filter(r => r.Region === 'Auvergne-Rhône-Alpes' && r.Dispositif === 'Action cœur de ville').map(r => r.id));
+  const ids = await page.evaluate(() => window.__mockGrist.selected);
+  assert(JSON.stringify(ids) === JSON.stringify(expected), `lignes transmises : ${ids && ids.length} au lieu de ${expected.length}`);
+  await page.locator('tbody tr').first().locator('td.rowTotal').click();
+  assert((await page.evaluate(() => window.__mockGrist.selected)).length === await page.evaluate(() => window.__mockGrist.data.filter(r => r.Region === 'Auvergne-Rhône-Alpes').length), 'sous-total de groupe : lignes du groupe attendues');
+  await page.close();
+});
+
+await test('sélection conservée quand les données ou la mise en forme changent', async () => {
   const page = await open({ settings: { ...base, cols: ['Statut'] } });
   await page.locator(LEAF).first().click();
+  await page.evaluate(() => TCDConfig.setRenderer('Carte de chaleur'));
+  await page.waitForTimeout(200);
+  assert(await page.locator('td.is-selected').count() === 1, 'case sélectionnée perdue après changement de rendu');
+  await page.evaluate(() => window.__mockGrist.emitRecords(window.__mockGrist.data.slice(0, 100)));
   await page.waitForTimeout(250);
-  assert(await page.locator('#drawer').isVisible(), 'panneau de détail absent');
-  const n = await page.locator('.detail-table tbody tr').count();
   const ids = await page.evaluate(() => window.__mockGrist.selected);
-  assert(Array.isArray(ids) && ids.length === n && n > 0, `sélection incohérente : ${ids && ids.length} vs ${n}`);
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
-  assert(await page.locator('#drawer').isHidden(), 'Échap doit fermer le détail');
-  assert((await page.evaluate(() => window.__mockGrist.selected) || []).length === n, 'la sélection doit rester active pour les vues liées');
+  assert(Array.isArray(ids) && ids.length > 0 && ids.every(id => id <= 100), 'sélection non recalculée sur les nouvelles données : ' + JSON.stringify(ids));
   await page.close();
 });
 
@@ -201,7 +228,7 @@ await test('navigation au clavier dans le tableau', async () => {
   assert(focused === '1', 'cellule active inattendue : ' + focused);
   await page.keyboard.press('Enter');
   await page.waitForTimeout(250);
-  assert(await page.locator('#drawer').isVisible(), 'Entrée doit ouvrir le détail');
+  assert((await page.evaluate(() => window.__mockGrist.selected) || []).length > 0, 'Entrée doit filtrer les vues liées');
   await page.close();
 });
 
@@ -288,24 +315,47 @@ await test('anciens réglages graphique / format / couleur ignorés et nettoyés
   await page.close();
 });
 
-await test('clic : détail limité aux colonnes du tableau, sélection gardée pour les vues liées', async () => {
-  const page = await open({ settings: { ...base, cols: ['Statut'] } });
-  await page.locator(LEAF).first().click();
+await test('groupes repliés conservés après un recalcul', async () => {
+  const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'] } });
+  await page.locator('tbody th.pvtRowLabel.rowcol0').nth(1).click();
+  await page.waitForTimeout(150);
+  await page.evaluate(() => TCDConfig.setRenderer('Table avec barres'));
   await page.waitForTimeout(250);
-  const heads = await page.locator('.detail-table th').allTextContents();
-  assert(heads.join('|') === 'Region|Statut|Montant', 'colonnes du détail : ' + heads.join('|'));
-  await page.keyboard.press('Escape');
+  const collapsed = await page.locator('tbody th.pvtRowLabel.rowcol0.rowcollapsed').allTextContents();
+  assert(collapsed.length === 1 && collapsed[0].includes('Bretagne'), 'repli perdu : ' + collapsed.join('|'));
+  await page.evaluate(() => window.__mockGrist.emitRecords());
   await page.waitForTimeout(250);
-  const kept = await page.evaluate(() => window.__mockGrist.selected);
-  assert(Array.isArray(kept) && kept.length > 0, 'la sélection doit rester après fermeture du détail');
-  await page.keyboard.press('Escape');
-  assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'second Échap : la sélection doit être effacée');
-  await page.evaluate(() => update({ clickDetail: false }));
-  await page.waitForTimeout(100);
-  await page.locator(LEAF).nth(5).click();
-  await page.waitForTimeout(250);
-  assert(await page.locator('#drawer').isHidden(), 'détail désactivé : le panneau ne doit pas s’ouvrir');
-  assert((await page.evaluate(() => window.__mockGrist.selected) || []).length > 0, 'détail désactivé : la sélection doit quand même être transmise');
+  assert(await page.locator('tbody th.pvtRowLabel.rowcol0.rowcollapsed').count() === 1, 'repli perdu après mise à jour des données');
+  await page.close();
+});
+
+await test('grand tableau : 1 500 lignes puis « Afficher les lignes restantes »', async () => {
+  const data = Array.from({ length: 2000 }, (_, i) => ({ id: i + 1, Code: 'C' + String(i).padStart(4, '0'), Valeur: i }));
+  const page = await open({ settings: { rows: ['Code'], cols: [], vals: ['Valeur'], aggregatorName: 'Somme' } }, { data });
+  const visible = () => page.locator('tbody th.pvtRowLabel:visible').count();
+  assert(await visible() === 1500, 'lignes visibles : ' + await visible());
+  assert((await page.locator('.show-more').textContent()).includes('500'), 'bouton absent');
+  await page.click('.show-more');
+  assert(await visible() === 2000, 'toutes les lignes doivent s’afficher');
+  await page.close();
+});
+
+await test('filtre d’un champ à plus de 1 000 valeurs (liste construite à la demande)', async () => {
+  const data = Array.from({ length: 1500 }, (_, i) => ({ id: i + 1, Code: 'C' + String(i).padStart(4, '0'), Valeur: i }));
+  const page = await open({ settings: { rows: ['Code'], cols: [], vals: ['Valeur'], aggregatorName: 'Somme' } }, { data });
+  await page.evaluate(() => grist.__openConfig());
+  await page.locator('#slot-rows .pvtTriangle').first().click();
+  await page.locator('#filter-layer .pvtFilterBox:visible .fp-many button').click();
+  await page.waitForTimeout(300);
+  const box = page.locator('#filter-layer .pvtFilterBox:visible');
+  assert(await box.locator('input.pvtFilter').count() === 1500, 'toutes les valeurs doivent être proposées');
+  await box.locator('input.pvtSearch').fill('C1499');
+  await box.locator('input.pvtSearch').press('Enter');
+  await box.locator('label:visible .fp-only').first().click({ force: true });
+  await box.locator('.btn-primary').click();
+  await page.waitForTimeout(400);
+  const rows = await page.locator('tbody th.pvtRowLabel').allTextContents();
+  assert(rows.length === 1 && rows[0].includes('C1499'), 'lignes : ' + rows.slice(0, 3).join('|'));
   await page.close();
 });
 

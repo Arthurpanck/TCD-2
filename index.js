@@ -20,12 +20,15 @@ const DEFAULTS = {
   rowTotals: true,
   colTotals: true,
   subtotals: true,
-  clickDetail: true,
   density: 'standard',
   fontScale: 1,
 };
 // Réglages des versions précédentes qui n'existent plus (graphique, format des nombres, couleur d'accent)
-const OBSOLETE = ['chartType', 'decimals', 'scale', 'suffix', 'accent'];
+// (clickDetail : le panneau de détail a laissé place au seul filtrage des vues liées)
+const OBSOLETE = ['chartType', 'decimals', 'scale', 'suffix', 'accent', 'clickDetail'];
+// Nombre de lignes affichées avant le bouton « Afficher les lignes restantes »
+const ROW_LIMIT = 1500;
+const MENU_LIMIT = 1000;
 const ORDERS = ['key_a_to_z', 'value_a_to_z', 'value_z_to_a'];
 const DENSITIES = ['compact', 'standard', 'comfortable'];
 
@@ -39,8 +42,12 @@ const state = {
   // Options courantes de pivotUI et données calculées du dernier rendu
   pvt: null,
   pd: null,
-  // Repli de tous les groupes demandé depuis le menu Affichage (non enregistré)
-  collapseAll: false,
+  // État d'affichage propre à la session (non enregistré) : groupes repliés, lignes affichées, case sélectionnée
+  collapsed: { rows: [], cols: [] },
+  rowLimit: ROW_LIMIT,
+  selection: null,
+  // Au-delà, pivotUI ne construit pas la liste de filtre d'un champ (coûteux) : elle est construite à la demande
+  menuLimit: MENU_LIMIT,
   aggLabel: '',
   saveTimer: null,
   savePending: false,
@@ -69,7 +76,6 @@ function normalizeSettings(raw, legacy = {}) {
   s.rowTotals = s.rowTotals !== false;
   s.colTotals = s.colTotals !== false;
   s.subtotals = s.subtotals !== false;
-  s.clickDetail = s.clickDetail !== false;
   OBSOLETE.forEach(k => { delete s[k]; });
   // Ancien réglage « Taille colonnes » (0.25x → 1.0x) converti en densité
   if ((!raw || raw.density === undefined) && legacy.columnSize) {
@@ -144,7 +150,6 @@ function rendererOptions() {
     arrowExpanded: '▾',
     rowSubtotalDisplay: { disableSubtotal: !s.subtotals },
     colSubtotalDisplay: { disableSubtotal: !s.subtotals },
-    collapseRowsAt: state.collapseAll ? 0 : null,
     localeStrings: { totals: 'Total' },
   };
 }
@@ -181,7 +186,7 @@ function build() {
     derivedAttributes: ds.derivedAttributes,
     sorters: ds.sorters,
     hiddenAttributes: ['id'],
-    menuLimit: 1000,
+    menuLimit: state.menuLimit,
     unusedAttrsVertical: true,
     localeStrings: {
       selectAll: 'Tout cocher', selectNone: 'Tout décocher', filterResults: 'Rechercher une valeur…',
@@ -219,7 +224,10 @@ function onRefresh(pvt) {
   if (changed && ['rows', 'cols', 'exclusions', 'aggregatorName', 'vals'].some(k => JSON.stringify(next[k]) !== JSON.stringify(before[k]))) {
     clearSelection();
   }
-  if (next.rows.join('\0') !== before.rows.join('\0')) { state.collapseAll = false; }
+  if (next.rows.join('\0') !== before.rows.join('\0') || next.cols.join('\0') !== before.cols.join('\0')) {
+    state.collapsed = { rows: [], cols: [] };
+    state.rowLimit = ROW_LIMIT;
+  }
   state.settings = next;
   // La première passe suit la construction : elle reflète les réglages reçus, sans les réenregistrer
   if (changed && !state.building) { scheduleSave(); }
@@ -261,8 +269,11 @@ function showResult() {
   out.classList.remove('is-message');
   out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
   TCDRender.decorate(table, { aggLabel: state.aggLabel, rowTotals: s.rowTotals, colTotals: s.colTotals, rows: pvt.rows.length, cols: pvt.cols.length });
+  restoreCollapsed(table);
+  applyRowLimit(table);
   TCDRender.stick(table);
   indexColumns(table);
+  restoreSelection(table);
   renderSummary(s);
 }
 
@@ -350,7 +361,48 @@ function indexColumns(table) {
 function cellInfo(td) {
   const detail = {};
   td.dispatchEvent(new CustomEvent('tcd-info', { detail }));
-  return detail.filters ? detail : null;
+  if (detail.filters) { return detail; }
+  // subtotal.js ne pose pas de gestionnaire sur les cases « Total » des lignes : critères de la ligne
+  const path = td.classList.contains('rowTotal') && rowPath(td.parentElement);
+  if (!path || !state.pd) { return null; }
+  const filters = {};
+  path.forEach((v, i) => { filters[state.pd.rowAttrs[i]] = v; });
+  return { value: parseFloat(td.dataset.value), filters, pivotData: state.pd };
+}
+
+// Chemin (valeurs typées des champs en lignes) de chaque ligne du tableau, calculé une fois par rendu
+let rowPaths = new WeakMap();
+let rowPathsTable = null;
+
+/** Chemin d'une ligne : libellés des groupes qui la couvrent, retrouvés avec leur type d'origine */
+function rowPath(tr) {
+  const table = tr.closest('table');
+  if (table !== rowPathsTable) {
+    rowPathsTable = table;
+    indexRowPaths(table);
+  }
+  return rowPaths.get(tr) || null;
+}
+
+function indexRowPaths(table) {
+  rowPaths = new WeakMap();
+  const pd = state.pd;
+  if (!pd || !pd.rowAttrs.length) { return; }
+  // Valeur d'origine (nombre ou texte) de chaque libellé, par niveau
+  const typed = pd.rowAttrs.map(() => new Map());
+  for (const key of pd.getRowKeys()) { key.forEach((v, i) => typed[i].set(String(v), v)); }
+  const current = [];
+  for (const tr of table.tBodies[0].rows) {
+    const labels = tr.querySelectorAll(':scope > th.pvtRowLabel');
+    if (!labels.length) { continue; }
+    let level = 0;
+    labels.forEach(th => {
+      level = Number([...th.classList].find(c => /^rowcol\d+$/.test(c)).slice(6));
+      current[level] = typed[level].get(TCDRender.headerText(th));
+    });
+    current.length = level + 1;
+    rowPaths.set(tr, current.slice());
+  }
 }
 
 const tooltip = $id('tooltip');
@@ -370,7 +422,7 @@ function showTooltip(td, x, y) {
   tooltip.replaceChildren(
     ...(lines.length ? lines : [el('div', { class: 'tt-line' }, el('span', {}, 'Ensemble des données'))]),
     el('div', { class: 'tt-value' }, el('span', {}, state.aggLabel), el('b', {}, td.textContent)),
-    el('div', { class: 'tt-hint' }, 'Cliquez pour voir le détail'));
+    el('div', { class: 'tt-hint' }, td.classList.contains('is-selected') ? 'Cliquez pour tout réafficher dans les vues liées' : 'Cliquez pour filtrer les vues liées'));
   tooltip.hidden = false;
   const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
   let left = x + 14, top = y + 16;
@@ -401,11 +453,17 @@ function setupTableInteractions() {
   out.addEventListener('keydown', onTableKey);
   out.addEventListener('scroll', hideTooltip, { passive: true });
   out.addEventListener('click', e => {
+    if (e.target.closest('.show-more')) { return showAllRows(); }
     const td = e.target.closest(VALUE_CELLS);
     const info = td && cellInfo(td);
     if (info) { hideTooltip(); selectCell(info, td); }
-    // Un groupe replié ou déplié par subtotal.js change la largeur des colonnes figées
-    if (e.target.closest('th')) { requestAnimationFrame(restick); }
+    // Groupe replié ou déplié par subtotal.js : on mémorise l'état et on recale les colonnes figées
+    if (e.target.closest('th') && e.isTrusted) {
+      requestAnimationFrame(() => {
+        const table = out.querySelector('table.pvtTable');
+        if (table) { saveCollapsed(table); TCDRender.stick(table); }
+      });
+    }
   });
 
   // Recalcule les en-têtes figés quand la taille change (panneau Grist ouvert, redimensionnement…)
@@ -421,10 +479,74 @@ function restick() {
   if (table) { TCDRender.stick(table); }
 }
 
-/** Replie (ou déplie) tous les groupes du premier niveau (option collapseRowsAt de subtotal.js) */
+// ---------------------------------------------------------------------------
+// Groupes repliés : subtotal.js repart tout déplié à chaque calcul, on rejoue les replis mémorisés
+// ---------------------------------------------------------------------------
+
+/** Clé d'un groupe en lignes : son chemin */
+function rowGroupKey(th) {
+  const path = rowPath(th.parentElement);
+  return path ? JSON.stringify(path) : null;
+}
+
+/** Clé d'un groupe en colonnes : critères de son total de colonne */
+function colGroupKey(th, table) {
+  const td = table.querySelector(`td.colTotal[data-colnode="${th.dataset.colnode}"]`);
+  const info = td && cellInfo(td);
+  return info ? JSON.stringify(info.filters) : null;
+}
+
+function saveCollapsed(table) {
+  state.collapsed = {
+    rows: [...table.querySelectorAll('tbody th.pvtRowLabel.rowcollapsed')].map(rowGroupKey).filter(Boolean),
+    cols: [...table.querySelectorAll('thead th.pvtColLabel.colcollapsed')].map(th => colGroupKey(th, table)).filter(Boolean),
+  };
+}
+
+function restoreCollapsed(table) {
+  const rows = new Set(state.collapsed.rows), cols = new Set(state.collapsed.cols);
+  if (rows.size) {
+    table.querySelectorAll('tbody th.pvtRowLabel.rowexpanded').forEach(th => { if (rows.has(rowGroupKey(th))) { th.click(); } });
+  }
+  if (cols.size) {
+    table.querySelectorAll('thead th.pvtColLabel.colexpanded').forEach(th => { if (cols.has(colGroupKey(th, table))) { th.click(); } });
+  }
+}
+
+/** Replie tous les groupes du premier niveau (en-tête de niveau de subtotal.js), ou déplie tout */
 function setAllCollapsed(collapse) {
-  state.collapseAll = collapse;
-  refreshPivot();
+  const table = $id('output').querySelector('table.pvtTable');
+  if (!table) { return; }
+  if (!collapse) {
+    state.collapsed = { rows: [], cols: [] };
+    refreshPivot();
+    return;
+  }
+  const head = table.querySelector('thead th.pvtRowAxis.expanded');
+  if (head) { head.click(); }
+  saveCollapsed(table);
+  restick();
+}
+
+// ---------------------------------------------------------------------------
+// Limite d'affichage : au-delà de ROW_LIMIT lignes, les suivantes sont masquées jusqu'à demande
+// ---------------------------------------------------------------------------
+
+function applyRowLimit(table) {
+  const rows = [...table.tBodies[0].rows].filter(tr => !tr.querySelector('th.pvtTotalLabel.colTotal'));
+  if (rows.length <= state.rowLimit) { return; }
+  rows.slice(state.rowLimit).forEach(tr => tr.classList.add('tcd-over'));
+  rows[state.rowLimit].before(el('tr', { class: 'tcd-more' }, el('td', { colspan: 1000 },
+    el('button', { type: 'button', class: 'btn btn-ghost show-more' },
+      `Afficher les ${(rows.length - state.rowLimit).toLocaleString('fr-FR')} lignes restantes`))));
+}
+
+function showAllRows() {
+  state.rowLimit = Infinity;
+  const table = $id('output').querySelector('table.pvtTable');
+  table.querySelectorAll('tr.tcd-over').forEach(tr => tr.classList.remove('tcd-over'));
+  table.querySelectorAll('tr.tcd-more').forEach(tr => tr.remove());
+  restick();
 }
 
 /** Navigation au clavier : flèches entre les cellules, Entrée pour le détail */
@@ -471,78 +593,54 @@ function focusCell(td) {
   showTooltip(td, r.right - 8, r.bottom - 4);
 }
 
-let selectedTd = null;
+// ---------------------------------------------------------------------------
+// Sélection : comme un point sur le widget Carte, la case cliquée filtre les vues liées
+// (« Sélectionner par » ce widget). Elle est conservée d'un calcul à l'autre.
+// ---------------------------------------------------------------------------
 
-/** Colonnes utiles au détail : celles regroupées (lignes, colonnes) et celles calculées (valeurs) */
-function detailFields() {
-  const pvt = state.pvt;
-  const byName = new Map(state.dataset.fields.map(f => [f.name, f]));
-  const names = [...pvt.rows, ...pvt.cols, ...pvt.vals]
-    .map(n => (byName.get(n) && byName.get(n).parent) || n)
-    .filter((n, i, all) => byName.has(n) && all.indexOf(n) === i);
-  return names.map(n => byName.get(n));
-}
-
-/**
- * Clic sur une cellule : met la cellule en évidence et transmet ses lignes aux widgets Grist liés
- * (« Sélectionner par » ce widget). Le panneau de détail s'ouvre si le réglage est actif.
- */
 function selectCell(info, td) {
-  const records = [];
-  info.pivotData.forEachMatchingRecord(info.filters, rec => { records.push(rec); });
-  if (selectedTd) { selectedTd.classList.remove('is-selected'); }
-  selectedTd = td || null;
+  const key = JSON.stringify(info.filters);
+  // Second clic sur la même case : les vues liées réaffichent toutes les lignes
+  if (state.selection === key) { return clearSelection(); }
+  state.selection = key;
+  markSelected(td);
+  sendSelection(info);
+}
+
+function markSelected(td) {
+  $id('output').querySelectorAll('td.is-selected').forEach(c => c.classList.remove('is-selected'));
   if (td) { td.classList.add('is-selected'); }
-  selectRows(records.map(r => r.id).filter(id => typeof id === 'number'));
-  if (state.settings.clickDetail) { openDrawer(info, td, records); }
 }
 
-/** Panneau de détail d'une cellule */
-function openDrawer(info, td, records) {
-  $id('drawer-value').textContent = td.textContent || '—';
-  $id('drawer-sub').textContent = `${state.aggLabel} · ${records.length.toLocaleString('fr-FR')} ligne${records.length > 1 ? 's' : ''}`;
-  const entries = Object.entries(info.filters);
-  $id('drawer-filters').replaceChildren(...(entries.length
-    ? entries.map(([a, v]) => el('span', { class: 'crit' }, el('span', {}, a), el('b', {}, String(v))))
-    : [el('span', { class: 'crit' }, el('b', {}, 'Toutes les lignes'))]));
+/** Transmet aux vues liées les lignes de la case (identifiants Grist des enregistrements) */
+function sendSelection(info) {
+  const ids = [];
+  info.pivotData.forEachMatchingRecord(info.filters, rec => { if (typeof rec.id === 'number') { ids.push(rec.id); } });
+  selectRows(ids);
+}
 
-  const LIMIT = 300;
-  const fields = detailFields();
-  const body = $id('drawer-body');
-  body.replaceChildren(el('table', { class: 'detail-table' },
-    el('thead', {}, el('tr', {}, fields.map(f => el('th', { class: f.type === 'number' ? 'num' : '' }, f.name)))),
-    el('tbody', {}, records.slice(0, LIMIT).map(rec => el('tr', {}, fields.map(f => {
-      const v = rec[f.name];
-      return el('td', { class: (f.type === 'number' ? 'num' : '') + (v === TCDData.EMPTY ? ' is-empty' : '') },
-        typeof v === 'number' ? TCDGrist.formatter(f.colId)(v) : String(v));
-    }))))));
-  if (records.length > LIMIT) {
-    body.append(el('p', { class: 'hint' }, `Seules les ${LIMIT} premières lignes sont affichées.`));
+/** Après un calcul : retrouve la case sélectionnée et renvoie ses lignes (les données ont pu changer) */
+function restoreSelection(table) {
+  if (!state.selection) { return; }
+  for (const td of table.querySelectorAll(VALUE_CELLS)) {
+    const info = cellInfo(td);
+    if (info && JSON.stringify(info.filters) === state.selection) {
+      markSelected(td);
+      sendSelection(info);
+      return;
+    }
   }
-
-  $id('drawer').hidden = false;
-  $id('drawer-backdrop').hidden = false;
-  requestAnimationFrame(() => document.body.classList.add('drawer-open'));
-  $id('drawer-close').focus({ preventScroll: true });
+  clearSelection();
 }
 
-/** Ferme le panneau ; la cellule reste sélectionnée pour les widgets liés */
-function closeDrawer() {
-  if ($id('drawer').hidden) { return false; }
-  document.body.classList.remove('drawer-open');
-  setTimeout(() => { $id('drawer').hidden = true; $id('drawer-backdrop').hidden = true; }, 180);
-  return true;
-}
-
-/** Désélectionne la cellule : les widgets liés affichent de nouveau toutes les lignes */
+/** Désélectionne : les widgets liés affichent de nouveau toutes les lignes */
 function clearSelection() {
-  if (!selectedTd) { return; }
-  selectedTd.classList.remove('is-selected');
-  selectedTd = null;
+  if (!state.selection) { return; }
+  state.selection = null;
+  markSelected(null);
   selectRows(null);
 }
 
-/** Transmet la sélection aux widgets Grist liés (« Sélectionner par » ce widget) */
 function selectRows(ids) {
   try {
     if (typeof grist.setSelectedRows === 'function') {
@@ -669,7 +767,6 @@ function openConfig() {
     state.configOpen = true;
     state.snapshot = JSON.parse(JSON.stringify(state.settings));
   }
-  closeDrawer();
   $id('config').hidden = false;
   document.body.classList.add('is-config');
   setSaveState(state.savePending ? 'saving' : 'saved');
@@ -700,7 +797,15 @@ function revert() {
 // Liaison avec Grist
 // ---------------------------------------------------------------------------
 
+/** Construit les listes de filtre de tous les champs, même très longues, puis rouvre celle demandée */
+function showAllFilterValues(attr) {
+  state.menuLimit = Infinity;
+  build();
+  TCDConfig.openFilter(attr);
+}
+
 const app = {
+  showAllFilterValues,
   settings: () => state.settings,
   fields: () => (state.dataset ? state.dataset.fields : []),
   update,
@@ -724,13 +829,10 @@ function handleOptions(options) {
 function start() {
   $id('btn-display').innerHTML = Icons.svg('sliders', 17);
   $id('btn-export').innerHTML = Icons.svg('download', 17);
-  $id('drawer-close').innerHTML = Icons.svg('x', 18);
   $id('btn-display').addEventListener('click', e => openDisplayMenu(e.currentTarget));
   $id('btn-export').addEventListener('click', e => openExportMenu(e.currentTarget));
-  $id('drawer-close').addEventListener('click', closeDrawer);
-  $id('drawer-backdrop').addEventListener('click', closeDrawer);
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && $id('popover').hidden && !closeDrawer()) { clearSelection(); }
+    if (e.key === 'Escape' && $id('popover').hidden) { clearSelection(); }
   });
 
   showMessage('table', 'Chargement des données…', '');

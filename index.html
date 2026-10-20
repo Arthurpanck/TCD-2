@@ -108,8 +108,7 @@
             </div>
             <div class="field">
               <span class="field-label">Clic sur une case</span>
-              <label class="switch"><input type="checkbox" id="click-detail"><span></span>Afficher le détail des lignes</label>
-              <p class="hint">Dans tous les cas, les lignes de la case sont transmises aux widgets Grist liés à ce tableau (« Sélectionner par »).</p>
+              <p class="hint">Les widgets Grist liés à ce tableau (« Sélectionner par ») n'affichent que les lignes de la case cliquée. Cliquez de nouveau sur la case, ou appuyez sur Échap, pour tout réafficher.</p>
             </div>
             <div class="field">
               <span class="field-label">Densité</span>
@@ -137,22 +136,6 @@
       <main id="stage">
         <div id="output" class="output" tabindex="0"></div>
       </main>
-
-      <!-- Détail d'une cellule -->
-      <div id="drawer-backdrop" hidden></div>
-      <aside id="drawer" aria-label="Détail de la cellule" hidden>
-        <div class="drawer-head">
-          <div>
-            <div class="drawer-kicker">Détail</div>
-            <div id="drawer-value" class="drawer-value"></div>
-            <div id="drawer-sub" class="drawer-sub"></div>
-          </div>
-          <button type="button" id="drawer-close" class="icon-btn" title="Fermer (Échap)"></button>
-        </div>
-        <div id="drawer-filters" class="filter-list"></div>
-        <div id="drawer-body" class="drawer-body"></div>
-        <p class="drawer-foot hint">Ces lignes sont aussi transmises aux widgets Grist liés à ce tableau (« Sélectionner par »). Échap pour fermer, Échap encore pour désélectionner.</p>
-      </aside>
 
       <div id="filter-layer"></div>
       <div id="popover" class="popover" hidden></div>

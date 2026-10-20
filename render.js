@@ -108,10 +108,10 @@ const TCDRender = (function () {
       const head = table.querySelector('thead th.pvtTotalLabel.rowTotal');
       if (head) { head.textContent = ctx.aggLabel; head.classList.add('pvtValueHeader'); }
     }
-    table.querySelectorAll('th[data-rowheader], th[data-colheader]').forEach(th => {
-      const text = th.getAttribute('data-rowheader') || th.getAttribute('data-colheader');
-      if (text.trim() === EMPTY) { th.classList.add('is-empty'); }
-      if (text.length > 28) { th.title = text.trim(); }
+    table.querySelectorAll('th.pvtRowLabel, th.pvtColLabel').forEach(th => {
+      const text = headerText(th);
+      if (text === EMPTY) { th.classList.add('is-empty'); }
+      if (text.length > 28) { th.title = text; }
     });
     table.querySelectorAll('td[style*="background"]').forEach(td => {
       td.classList.add('is-heat');
@@ -119,6 +119,9 @@ const TCDRender = (function () {
     });
     if (table.querySelectorAll('td').length > 3000) { table.classList.add('is-large'); }
   }
+
+  /** Libellé d'un en-tête de groupe, sans la flèche de repli ajoutée par subtotal.js */
+  const headerText = th => th.textContent.replace(/^\s*[▾▸]\s/, '').trim();
 
   /**
    * Barres de pivottable (barchart) : la hauteur calculée par la librairie devient une jauge
@@ -166,5 +169,5 @@ const TCDRender = (function () {
     });
   }
 
-  return { normalizeName, kindOf, nameOf, renderers, decorate, stick };
+  return { normalizeName, kindOf, nameOf, renderers, decorate, stick, headerText };
 })();
