@@ -7,7 +7,9 @@
     <!-- Système de design de l'État (DSFR) : composants, icônes et police Marianne -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/dsfr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/utility/icons/icons.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <!-- ?v= : version des fichiers du widget, à changer à chaque publication pour qu'un CDN (raw.githack…)
+         ne serve jamais un mélange d'anciens et de nouveaux fichiers -->
+    <link rel="stylesheet" href="styles.css?v=20261020-1">
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
@@ -24,9 +26,12 @@
         <div class="cfg-head">
           <!-- Titre du tableau, modifiable en place (facultatif) : barre de résumé et export Excel -->
           <div class="cfg-title">
-            <label class="fr-sr-only" for="table-title">Titre du tableau</label>
-            <input type="text" id="table-title" class="cfg-title-input" maxlength="200" autocomplete="off"
-                   placeholder="Titre du tableau (facultatif)" title="Titre affiché au-dessus du tableau et repris dans l'export Excel">
+            <div class="cfg-title-field">
+              <label class="fr-sr-only" for="table-title">Titre du tableau</label>
+              <input type="text" id="table-title" class="cfg-title-input" maxlength="200" autocomplete="off"
+                     placeholder="Ajouter un titre au tableau" title="Titre affiché au-dessus du tableau et repris dans l'export Excel">
+              <span class="cfg-title-edit fr-icon-edit-line fr-icon--sm" aria-hidden="true"></span>
+            </div>
             <span id="save-state" class="save-state" aria-live="polite"></span>
           </div>
           <ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-btns-group--right">
@@ -162,13 +167,13 @@
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     </div>
 
-    <script src="ui.js"></script>
-    <script src="gristColumns.js"></script>
-    <script src="data.js"></script>
-    <script src="aggregators.js"></script>
-    <script src="render.js"></script>
-    <script src="export.js"></script>
-    <script src="config.js"></script>
-    <script src="index.js"></script>
+    <script src="ui.js?v=20261020-1"></script>
+    <script src="gristColumns.js?v=20261020-1"></script>
+    <script src="data.js?v=20261020-1"></script>
+    <script src="aggregators.js?v=20261020-1"></script>
+    <script src="render.js?v=20261020-1"></script>
+    <script src="export.js?v=20261020-1"></script>
+    <script src="config.js?v=20261020-1"></script>
+    <script src="index.js?v=20261020-1"></script>
   </body>
 </html>
