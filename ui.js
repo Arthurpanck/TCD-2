@@ -71,11 +71,25 @@ const UI = (function () {
       root.append(el('button', {
         type: 'button', role: 'menuitem', class: 'menu-item' + (item.danger ? ' is-danger' : ''),
         onclick: () => { closePopover(); item.onClick(); },
-        html: (item.icon ? Icons.svg(item.icon, 15) : '') + `<span></span>`,
+        html: (item.icon ? Icons.get(item.icon, 15) : '') + `<span></span>`,
       }));
       root.lastChild.querySelector('span').textContent = item.label;
     }
     return root;
+  }
+
+  let segSeq = 0;
+  /** Bouton segmenté du DSFR (fr-segmented) : items = [[valeur, libellé]] */
+  function segmented(legend, items, value, onChange) {
+    const name = 'seg-' + (++segSeq);
+    return el('fieldset', { class: 'fr-segmented fr-segmented--sm' },
+      el('legend', { class: 'fr-segmented__legend' }, legend),
+      el('div', { class: 'fr-segmented__elements' }, items.map(([v, label], i) => {
+        const id = `${name}-${i}`;
+        const input = el('input', { type: 'radio', id, name, value: v, onchange: () => onChange(v) });
+        input.checked = v === value;
+        return el('div', { class: 'fr-segmented__element' }, input, el('label', { class: 'fr-label', for: id }, label));
+      })));
   }
 
   function toast(message, kind = 'info') {
@@ -96,5 +110,5 @@ const UI = (function () {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePopover(); } });
   window.addEventListener('resize', () => position());
 
-  return { el, openPopover, closePopover, isOpenFor, menu, toast };
+  return { el, openPopover, closePopover, isOpenFor, menu, segmented, toast };
 })();

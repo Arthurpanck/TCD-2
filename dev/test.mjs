@@ -133,8 +133,8 @@ await test('filtre de valeurs : exclusion, résumé et enregistrement', async ()
   await page.click('#slot-rows li.chip');
   await page.click('.menu-item:has-text("Filtrer")');
   const box = page.locator('#filter-layer .pvtFilterBox:visible');
-  await box.locator('label', { hasText: 'Bretagne' }).locator('input').uncheck();
-  await box.locator('.btn-primary').click();
+  await box.locator('.fr-checkbox-group', { hasText: 'Bretagne' }).locator('label').click();
+  await box.locator(':scope > p:last-child .fr-btn').first().click();
   await page.waitForTimeout(600);
   assert(await page.locator('th.pvtRowLabel', { hasText: 'Bretagne' }).count() === 0, 'Bretagne toujours affichée');
   assert((await page.locator('.sum-meta').textContent()).includes('/ 400'), 'résumé sans le nombre de lignes filtrées');
@@ -158,7 +158,7 @@ await test('clic sur une case : filtre les vues liées (comme un point de la car
   await cell.click();
   assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'second clic : les vues liées doivent tout réafficher');
   await cell.click();
-  await page.click('.sum-selection button');
+  await page.click('.sum-selection');
   assert(await page.evaluate(() => window.__mockGrist.selected) === null && await page.locator('.sum-selection').count() === 0, 'la croix de la pastille doit désélectionner');
   await cell.click();
   await page.keyboard.press('Escape');
@@ -247,8 +247,8 @@ await test('filtres rapides depuis la barre de résumé', async () => {
   const box = await filter.boundingBox();
   const anchor = await page.locator('.sum-filters').boundingBox();
   assert(Math.abs(box.y - (anchor.y + anchor.height + 6)) < 4, `fenêtre de filtre mal positionnée (y=${box.y})`);
-  await filter.locator('label', { hasText: 'Bretagne' }).locator('input').check();
-  await filter.locator('.btn-primary').click();
+  await filter.locator('.fr-checkbox-group', { hasText: 'Bretagne' }).locator('label').click();
+  await filter.locator(':scope > p:last-child .fr-btn').first().click();
   await page.waitForTimeout(500);
   assert(await page.locator('.sum-filters').count() === 0, 'le filtre doit être retiré');
   await page.close();
@@ -357,8 +357,10 @@ await test('filtre d’un champ à plus de 1 000 valeurs (liste construite à la
   assert(await box.locator('input.pvtFilter').count() === 1500, 'toutes les valeurs doivent être proposées');
   await box.locator('input.pvtSearch').fill('C1499');
   await box.locator('input.pvtSearch').press('Enter');
-  await box.locator('label:visible .fp-only').first().click({ force: true });
-  await box.locator('.btn-primary').click();
+  const only = box.locator('.fr-checkbox-group:visible').first();
+  await only.hover();
+  await only.locator('.fp-only').click();
+  await box.locator(':scope > p:last-child .fr-btn').first().click();
   await page.waitForTimeout(400);
   const rows = await page.locator('tbody th.pvtRowLabel').allTextContents();
   assert(rows.length === 1 && rows[0].includes('C1499'), 'lignes : ' + rows.slice(0, 3).join('|'));
@@ -466,10 +468,10 @@ await test('filtre : « seulement » ne garde qu’une valeur', async () => {
   await page.evaluate(() => grist.__openConfig());
   await page.locator('#slot-rows .pvtTriangle').first().click();
   const box = page.locator('#filter-layer .pvtFilterBox:visible');
-  const label = box.locator('label', { hasText: 'Bretagne' });
+  const label = box.locator('.fr-checkbox-group', { hasText: 'Bretagne' });
   await label.hover();
   await label.locator('.fp-only').click();
-  await box.locator('.btn-primary').click();
+  await box.locator(':scope > p:last-child .fr-btn').first().click();
   await page.waitForTimeout(500);
   const rows = await page.locator('tbody th.pvtRowLabel').allTextContents();
   assert(rows.length === 1 && rows[0].includes('Bretagne'), 'lignes : ' + rows.join('|'));

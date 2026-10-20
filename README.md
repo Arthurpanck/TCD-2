@@ -2,6 +2,8 @@
 
 Ce widget permet de créer un **tableau croisé dynamique** à partir des données sources de Grist. Il s'appuie entièrement sur [pivottable.js](https://pivottable.js.org/examples/) (interface `pivotUI`, calculs, filtres, tris) et sur [subtotal.js](https://github.com/nagarajanchinnasamy/subtotal) (sous-totaux repliables, carte de chaleur, barres), habillés pour s'intégrer à Grist.
 
+L'interface utilise le [Système de design de l'État](https://www.systeme-de-design.gouv.fr/) (DSFR 1.15, feuilles de style `@gouvfr/dsfr` : boutons, tags, champs, interrupteurs, accordéon, tableau, encarts, icônes et police Marianne), en thème clair ou sombre selon Grist. Le JavaScript du DSFR n'est pas chargé : il ralentissait fortement les longues listes de filtres, et le widget gère lui-même son seul accordéon. Le DSFR et la police Marianne sont réservés aux sites des services de l'État.
+
 Il s'agit d'une refonte du widget intégré à Grist Labs, dont l'auteur original est [jperon](https://github.com/jperon).
 
 Cette version du widget est développée par [Arthur Panckoucke](https://github.com/Arthurpanck).
@@ -66,4 +68,4 @@ Organisation du code :
 | `gristColumns.js` | Formats et libellés des colonnes Grist (logique de formatage de Grist) |
 | `data.js` | Préparation des données Grist (types, valeurs, dérivés de dates, tris) |
 | `aggregators.js` | Catalogue des calculs transmis à pivotUI |
-| `ui.js`, `icons.js` | Popovers, menus, notifications, icônes |
+| `ui.js`, `icons.js` | Popovers, menus, notifications, contrôles segmentés et icônes du DSFR |

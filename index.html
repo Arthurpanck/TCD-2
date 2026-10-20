@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-fr-theme="light">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tableau croisé dynamique</title>
+    <!-- Système de design de l'État (DSFR) : composants, icônes et police Marianne -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/dsfr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/utility/icons/icons.min.css">
     <link rel="stylesheet" href="styles.css">
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
@@ -20,105 +23,138 @@
       <aside id="config" aria-label="Configuration du tableau croisé" hidden>
         <div class="cfg-head">
           <div class="cfg-title">
-            <h2>Configuration</h2>
+            <h2 class="fr-h6 fr-mb-0">Configuration</h2>
             <span id="save-state" class="save-state" aria-live="polite"></span>
           </div>
-          <div class="cfg-head-actions">
-            <button type="button" id="cfg-revert" class="btn btn-ghost" title="Revenir à l'état d'ouverture de la configuration">Annuler</button>
-            <button type="button" id="cfg-done" class="btn btn-primary">Terminer</button>
-          </div>
+          <ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-btns-group--right">
+            <li><button type="button" id="cfg-revert" class="fr-btn fr-btn--secondary" title="Revenir à l'état d'ouverture de la configuration">Annuler</button></li>
+            <li><button type="button" id="cfg-done" class="fr-btn">Terminer</button></li>
+          </ul>
         </div>
 
         <div class="cfg-body">
           <section class="cfg-section">
             <div class="cfg-section-head">
-              <h3>Champs disponibles</h3>
-              <span id="field-count" class="muted"></span>
+              <h3 class="cfg-heading">Champs disponibles</h3>
+              <span id="field-count" class="fr-hint-text"></span>
             </div>
-            <input type="search" id="field-search" class="input" placeholder="Rechercher un champ…" autocomplete="off">
+            <div class="fr-search-bar fr-search-bar--sm" role="search">
+              <label class="fr-label" for="field-search">Rechercher un champ</label>
+              <input class="fr-input" type="search" id="field-search" placeholder="Rechercher un champ" autocomplete="off">
+            </div>
             <div id="slot-unused" class="slot"></div>
-            <p class="hint">Glissez un champ vers <b>Lignes</b> ou <b>Colonnes</b>, ou cliquez dessus.</p>
+            <p class="fr-hint-text fr-mt-1w fr-mb-0">Glissez un champ vers Lignes ou Colonnes, ou cliquez dessus.</p>
           </section>
 
           <section class="cfg-section">
             <div class="cfg-section-head">
-              <h3><span class="zone-dot dot-rows"></span>Lignes</h3>
-              <button type="button" id="swap-axes" class="icon-btn sm" title="Inverser lignes et colonnes"></button>
+              <h3 class="cfg-heading">Lignes</h3>
+              <button type="button" id="swap-axes" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-arrow-left-right-line" title="Inverser lignes et colonnes">Inverser lignes et colonnes</button>
             </div>
             <div id="slot-rows" class="slot"></div>
           </section>
 
           <section class="cfg-section">
             <div class="cfg-section-head">
-              <h3><span class="zone-dot dot-cols"></span>Colonnes</h3>
+              <h3 class="cfg-heading">Colonnes</h3>
             </div>
             <div id="slot-cols" class="slot"></div>
           </section>
 
           <section class="cfg-section">
             <div class="cfg-section-head">
-              <h3><span class="zone-dot dot-vals"></span>Valeurs</h3>
+              <h3 class="cfg-heading">Valeurs</h3>
             </div>
-            <span class="field-label">Calcul</span>
             <div id="slot-vals" class="slot-vals"></div>
-            <p class="hint" id="format-hint"></p>
+            <p class="fr-hint-text fr-mt-1w fr-mb-0" id="format-hint"></p>
           </section>
 
           <section class="cfg-section" id="filters-section">
             <div class="cfg-section-head">
-              <h3>Filtres actifs</h3>
-              <button type="button" id="clear-filters" class="link-btn">Tout effacer</button>
+              <h3 class="cfg-heading">Filtres actifs</h3>
+              <button type="button" id="clear-filters" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm">Tout effacer</button>
             </div>
             <div id="active-filters" class="filter-list"></div>
           </section>
 
-          <details class="cfg-section" open>
-            <summary><h3>Affichage</h3></summary>
-            <div class="field">
-              <span class="field-label">Mise en forme</span>
-              <div class="segmented" id="renderer-seg" role="radiogroup">
-                <button type="button" data-value="table" role="radio">Tableau</button>
-                <button type="button" data-value="heat" role="radio">Chaleur</button>
-                <button type="button" data-value="bars" role="radio">Barres</button>
+          <section class="fr-accordion cfg-accordion">
+            <h3 class="fr-accordion__title">
+              <button type="button" class="fr-accordion__btn" aria-expanded="true" aria-controls="cfg-display">Affichage</button>
+            </h3>
+            <div class="fr-collapse fr-collapse--expanded" id="cfg-display">
+              <fieldset class="fr-segmented fr-segmented--sm" id="renderer-seg">
+                <legend class="fr-segmented__legend">Mise en forme</legend>
+                <div class="fr-segmented__elements">
+                  <div class="fr-segmented__element">
+                    <input value="table" type="radio" id="renderer-table" name="renderer">
+                    <label class="fr-label" for="renderer-table">Tableau</label>
+                  </div>
+                  <div class="fr-segmented__element">
+                    <input value="heat" type="radio" id="renderer-heat" name="renderer">
+                    <label class="fr-label" for="renderer-heat">Chaleur</label>
+                  </div>
+                  <div class="fr-segmented__element">
+                    <input value="bars" type="radio" id="renderer-bars" name="renderer">
+                    <label class="fr-label" for="renderer-bars">Barres</label>
+                  </div>
+                </div>
+              </fieldset>
+
+              <div class="fr-select-group" id="heat-scope-field">
+                <label class="fr-label" for="heat-scope">Échelle de couleur</label>
+                <select id="heat-scope" class="fr-select">
+                  <option value="all">Sur tout le tableau</option>
+                  <option value="row">Par ligne</option>
+                  <option value="col">Par colonne</option>
+                </select>
               </div>
-            </div>
-            <label class="field" id="heat-scope-field">
-              <span class="field-label">Échelle de couleur</span>
-              <select id="heat-scope" class="input">
-                <option value="all">Sur tout le tableau</option>
-                <option value="row">Par ligne</option>
-                <option value="col">Par colonne</option>
-              </select>
-            </label>
-            <div class="field-row">
-              <div class="field">
-                <span class="field-label">Tri des lignes</span>
-                <span id="slot-row-order"></span>
+
+              <div class="order-row">
+                <div>
+                  <p class="fr-label">Tri des lignes</p>
+                  <span id="slot-row-order"></span>
+                </div>
+                <div>
+                  <p class="fr-label">Tri des colonnes</p>
+                  <span id="slot-col-order"></span>
+                </div>
               </div>
-              <div class="field">
-                <span class="field-label">Tri des colonnes</span>
-                <span id="slot-col-order"></span>
+
+              <div class="fr-toggle fr-toggle--label-left">
+                <input type="checkbox" class="fr-toggle__input" id="row-totals">
+                <label class="fr-toggle__label" for="row-totals">Total par ligne</label>
               </div>
-            </div>
-            <div class="field">
-              <span class="field-label">Totaux</span>
-              <label class="switch"><input type="checkbox" id="row-totals"><span></span>Total par ligne</label>
-              <label class="switch"><input type="checkbox" id="col-totals"><span></span>Total par colonne</label>
-              <label class="switch"><input type="checkbox" id="subtotals"><span></span>Sous-totaux par groupe (repliables)</label>
-            </div>
-            <div class="field">
-              <span class="field-label">Clic sur une case</span>
-              <p class="hint">Les widgets Grist liés à ce tableau (« Sélectionner par ») n'affichent que les lignes de la case cliquée. Cliquez de nouveau sur la case, ou appuyez sur Échap, pour tout réafficher.</p>
-            </div>
-            <div class="field">
-              <span class="field-label">Densité</span>
-              <div class="segmented" id="density-seg" role="radiogroup">
-                <button type="button" data-value="compact" role="radio">Compacte</button>
-                <button type="button" data-value="standard" role="radio">Standard</button>
-                <button type="button" data-value="comfortable" role="radio">Aérée</button>
+              <div class="fr-toggle fr-toggle--label-left">
+                <input type="checkbox" class="fr-toggle__input" id="col-totals">
+                <label class="fr-toggle__label" for="col-totals">Total par colonne</label>
               </div>
+              <div class="fr-toggle fr-toggle--label-left">
+                <input type="checkbox" class="fr-toggle__input" id="subtotals" aria-describedby="subtotals-hint">
+                <label class="fr-toggle__label" for="subtotals">Sous-totaux par groupe</label>
+                <p class="fr-hint-text" id="subtotals-hint">Cliquez sur un groupe pour le replier.</p>
+              </div>
+
+              <fieldset class="fr-segmented fr-segmented--sm" id="density-seg">
+                <legend class="fr-segmented__legend">Densité</legend>
+                <div class="fr-segmented__elements">
+                  <div class="fr-segmented__element">
+                    <input value="compact" type="radio" id="density-compact" name="density">
+                    <label class="fr-label" for="density-compact">Compacte</label>
+                  </div>
+                  <div class="fr-segmented__element">
+                    <input value="standard" type="radio" id="density-standard" name="density">
+                    <label class="fr-label" for="density-standard">Standard</label>
+                  </div>
+                  <div class="fr-segmented__element">
+                    <input value="comfortable" type="radio" id="density-comfortable" name="density">
+                    <label class="fr-label" for="density-comfortable">Aérée</label>
+                  </div>
+                </div>
+              </fieldset>
+
+              <p class="fr-hint-text fr-mb-0">Cliquer sur une case filtre les widgets Grist liés à ce tableau (« Sélectionner par »). Cliquez de nouveau sur la case, ou appuyez sur Échap, pour tout réafficher.</p>
             </div>
-          </details>
+          </section>
 
           <div id="slot-renderer" hidden></div>
         </div>
@@ -128,13 +164,18 @@
       <header id="viewbar">
         <div id="summary" class="summary"></div>
         <div class="viewbar-actions">
-          <button type="button" id="btn-display" class="icon-btn" title="Affichage" aria-haspopup="true"></button>
-          <button type="button" id="btn-export" class="icon-btn" title="Exporter" aria-haspopup="true"></button>
+          <button type="button" id="btn-display" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-equalizer-line fr-btn--icon-left" aria-haspopup="true">Affichage</button>
+          <button type="button" id="btn-export" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-download-line fr-btn--icon-left" aria-haspopup="true">Exporter</button>
         </div>
       </header>
 
       <main id="stage">
-        <div id="output" class="output" tabindex="0"></div>
+        <!-- Tableau du DSFR : pivotUI y rend son tableau (cellule pvtRendererArea, placée dans fr-table__container) -->
+        <div id="output" class="output fr-table fr-table--sm fr-table--bordered fr-table--no-caption" tabindex="0">
+          <div class="fr-table__wrapper">
+            <div class="fr-table__container" id="table-scroll"></div>
+          </div>
+        </div>
       </main>
 
       <div id="filter-layer"></div>

@@ -290,9 +290,9 @@ function showMessage(icon, title, text) {
   out.classList.add('is-message');
   out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
   out.append(el('div', { class: 'empty' },
-    el('div', { class: 'empty-icon', html: Icons.svg(icon, 26) }),
-    el('h3', {}, title),
-    el('p', {}, text)));
+    el('div', { class: `fr-callout ${Icons.cls(icon)}` },
+      el('h3', { class: 'fr-callout__title fr-h6' }, title),
+      text ? el('p', { class: 'fr-callout__text fr-text--md' }, text) : null)));
 }
 
 function renderSummary(s) {
@@ -322,12 +322,11 @@ function renderSummary(s) {
   const meta = shown === total
     ? `${total.toLocaleString('fr-FR')} ligne${total > 1 ? 's' : ''}`
     : `${shown.toLocaleString('fr-FR')} / ${total.toLocaleString('fr-FR')} lignes`;
-  parts.push(el('span', { class: 'sum-meta' }, meta));
+  parts.push(el('span', { class: 'sum-meta fr-badge fr-badge--sm' }, meta));
   if (filters.length) {
     const btn = el('button', {
-      type: 'button', class: 'sum-filters', 'aria-haspopup': 'true',
-      html: Icons.svg('filter', 12) + `<span>${filters.length} filtre${filters.length > 1 ? 's' : ''}</span>`,
-    });
+      type: 'button', class: 'sum-filters fr-tag fr-tag--sm fr-tag--icon-left fr-icon-filter-line', 'aria-haspopup': 'true',
+    }, `${filters.length} filtre${filters.length > 1 ? 's' : ''}`);
     btn.addEventListener('click', () => {
       if (UI.isOpenFor(btn)) { return UI.closePopover(); }
       UI.openPopover(btn, el('div', { class: 'menu' },
@@ -339,9 +338,13 @@ function renderSummary(s) {
   if (state.selection) {
     const criteria = Object.values(JSON.parse(state.selection));
     const n = state.selectionCount;
-    parts.push(el('span', { class: 'sum-selection', title: 'Lignes envoyées aux widgets Grist liés à ce tableau (« Sélectionner par »)' },
-      el('span', {}, `Sélection : ${criteria.length ? criteria.join(' · ') : 'tout'} — ${n.toLocaleString('fr-FR')} ligne${n > 1 ? 's' : ''}`),
-      el('button', { type: 'button', title: 'Désélectionner (Échap)', 'aria-label': 'Désélectionner', html: Icons.svg('x', 12), onclick: clearSelection })));
+    const text = `Sélection : ${criteria.length ? criteria.join(' · ') : 'tout'} — ${n.toLocaleString('fr-FR')} ligne${n > 1 ? 's' : ''}`;
+    // Tag supprimable du DSFR : un clic désélectionne
+    parts.push(el('button', {
+      type: 'button', class: 'sum-selection fr-tag fr-tag--sm fr-tag--dismiss',
+      title: 'Lignes envoyées aux widgets Grist liés à ce tableau. Cliquer pour désélectionner (Échap).',
+      'aria-label': `Retirer la sélection ${criteria.join(' · ')}`, onclick: clearSelection,
+    }, el('span', { class: 'sum-selection-text' }, text)));
   }
   box.replaceChildren(...parts);
   box.title = box.textContent;
@@ -466,7 +469,8 @@ function setupTableInteractions() {
   });
   out.addEventListener('mouseleave', () => { setHoverCol(null); hideTooltip(); });
   out.addEventListener('keydown', onTableKey);
-  out.addEventListener('scroll', hideTooltip, { passive: true });
+  // La zone qui défile est le conteneur du tableau DSFR (fr-table__container)
+  out.addEventListener('scroll', hideTooltip, { passive: true, capture: true });
   out.addEventListener('click', e => {
     if (e.target.closest('.show-more')) { return showAllRows(); }
     const td = e.target.closest(VALUE_CELLS);
@@ -552,7 +556,7 @@ function applyRowLimit(table) {
   if (rows.length <= state.rowLimit) { return; }
   rows.slice(state.rowLimit).forEach(tr => tr.classList.add('tcd-over'));
   rows[state.rowLimit].before(el('tr', { class: 'tcd-more' }, el('td', { colspan: 1000 },
-    el('button', { type: 'button', class: 'btn btn-ghost show-more' },
+    el('button', { type: 'button', class: 'fr-btn fr-btn--secondary fr-btn--sm show-more' },
       `Afficher les ${(rows.length - state.rowLimit).toLocaleString('fr-FR')} lignes restantes`))));
 }
 
@@ -677,23 +681,21 @@ function openDisplayMenu(anchor) {
   const r = TCDRender.kindOf(s.rendererName);
   // Rouvre le menu pour refléter le nouveau réglage
   const reopen = () => { UI.closePopover(); openDisplayMenu(anchor); };
-  const seg = (items, current, onPick) => el('div', { class: 'segmented' }, items.map(([v, l]) =>
-    el('button', { type: 'button', class: v === current ? 'is-active' : '', onclick: () => { onPick(v); reopen(); } }, l)));
+  const groups = s.subtotals && s.rows.length > 1;
   const root = el('div', { class: 'menu display-menu' },
-    el('div', { class: 'menu-title' }, 'Mise en forme'),
-    seg([['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']], r.kind,
-      v => TCDConfig.setRenderer(TCDRender.nameOf(v, r.scope))),
-    s.subtotals && s.rows.length > 1 ? el('div', { class: 'menu-title' }, 'Groupes') : null,
-    s.subtotals && s.rows.length > 1 ? el('div', { class: 'segmented' },
-      el('button', { type: 'button', onclick: () => { setAllCollapsed(true); UI.closePopover(); } }, 'Tout replier'),
-      el('button', { type: 'button', onclick: () => { setAllCollapsed(false); UI.closePopover(); } }, 'Tout déplier')) : null,
-    el('div', { class: 'menu-title' }, 'Densité'),
-    seg([['compact', 'Compacte'], ['standard', 'Standard'], ['comfortable', 'Aérée']], s.density, v => update({ density: v })),
+    UI.segmented('Mise en forme', [['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']], r.kind,
+      v => { TCDConfig.setRenderer(TCDRender.nameOf(v, r.scope)); reopen(); }),
+    groups ? el('div', { class: 'menu-title' }, 'Groupes') : null,
+    groups ? el('ul', { class: 'fr-btns-group fr-btns-group--inline fr-btns-group--sm' },
+      el('li', {}, el('button', { type: 'button', class: 'fr-btn fr-btn--secondary', onclick: () => { setAllCollapsed(true); UI.closePopover(); } }, 'Tout replier')),
+      el('li', {}, el('button', { type: 'button', class: 'fr-btn fr-btn--secondary', onclick: () => { setAllCollapsed(false); UI.closePopover(); } }, 'Tout déplier'))) : null,
+    UI.segmented('Densité', [['compact', 'Compacte'], ['standard', 'Standard'], ['comfortable', 'Aérée']], s.density,
+      v => { update({ density: v }); reopen(); }),
     el('div', { class: 'menu-title' }, 'Taille du texte'),
     el('div', { class: 'stepper' },
-      el('button', { type: 'button', class: 'btn btn-ghost', title: 'Réduire', onclick: () => { update({ fontScale: +(s.fontScale - 0.1).toFixed(2) }); reopen(); } }, 'A−'),
+      el('button', { type: 'button', class: 'fr-btn fr-btn--tertiary fr-btn--sm', title: 'Réduire', onclick: () => { update({ fontScale: +(s.fontScale - 0.1).toFixed(2) }); reopen(); } }, 'A−'),
       el('span', {}, Math.round(s.fontScale * 100) + ' %'),
-      el('button', { type: 'button', class: 'btn btn-ghost', title: 'Agrandir', onclick: () => { update({ fontScale: +(s.fontScale + 0.1).toFixed(2) }); reopen(); } }, 'A+')));
+      el('button', { type: 'button', class: 'fr-btn fr-btn--tertiary fr-btn--sm', title: 'Agrandir', onclick: () => { update({ fontScale: +(s.fontScale + 0.1).toFixed(2) }); reopen(); } }, 'A+')));
   UI.openPopover(anchor, root, { align: 'end' });
 }
 
@@ -731,7 +733,7 @@ function openExportMenu(anchor) {
   if (UI.isOpenFor(anchor)) { return UI.closePopover(); }
   if (!state.pd) { return UI.toast("Rien à exporter : configurez d'abord le tableau.", 'info'); }
   UI.openPopover(anchor, UI.menu([
-    { icon: 'download', label: 'Excel mis en forme (.xlsx)', onClick: exportXlsx },
+    { icon: 'excel', label: 'Excel mis en forme (.xlsx)', onClick: exportXlsx },
     { icon: 'download', label: 'CSV, données brutes', onClick: () => TCDExport.csv(exportContext()) },
     { icon: 'copy', label: 'Copier (données brutes)', onClick: () => TCDExport.copy(exportContext()).then(() => UI.toast('Tableau copié : collez-le dans un tableur ou un courriel.', 'success')) },
     { icon: 'printer', label: 'Imprimer', onClick: () => window.print() },
@@ -823,8 +825,6 @@ function handleOptions(options) {
 }
 
 function start() {
-  $id('btn-display').innerHTML = Icons.svg('sliders', 17);
-  $id('btn-export').innerHTML = Icons.svg('download', 17);
   $id('btn-display').addEventListener('click', e => openDisplayMenu(e.currentTarget));
   $id('btn-export').addEventListener('click', e => openExportMenu(e.currentTarget));
   document.addEventListener('keydown', e => {
@@ -844,8 +844,20 @@ function start() {
     onEditOptions: openConfig,
   });
 
-  // Changement de thème Grist (clair/sombre) : les couleurs calculées doivent être rafraîchies
-  new MutationObserver(() => { if (state.pvt) { refreshPivot(); } }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-grist-appearance'] });
+  // Thème clair/sombre de Grist (ou, hors de Grist, celui du système) appliqué au DSFR ;
+  // les couleurs calculées de la carte de chaleur sont alors rafraîchies
+  const dark = window.matchMedia('(prefers-color-scheme: dark)');
+  const syncTheme = () => {
+    const grist = document.documentElement.getAttribute('data-grist-appearance');
+    const theme = grist ? (grist === 'dark' ? 'dark' : 'light') : (dark.matches ? 'dark' : 'light');
+    if (document.documentElement.getAttribute('data-fr-theme') !== theme) {
+      document.documentElement.setAttribute('data-fr-theme', theme);
+      if (state.pvt) { refreshPivot(); }
+    }
+  };
+  syncTheme();
+  dark.addEventListener('change', syncTheme);
+  new MutationObserver(syncTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-grist-appearance'] });
 
   grist.onOptions(handleOptions);
   // Si Grist n'envoie pas d'options (widget neuf), on affiche quand même

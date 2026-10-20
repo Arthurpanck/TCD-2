@@ -28,10 +28,16 @@ const TCDConfig = (function () {
     segmented($id('renderer-seg'), v => setRenderer(TCDRender.nameOf(v, $id('heat-scope').value)));
     segmented($id('density-seg'), v => app.update({ density: v }));
 
-    $id('swap-axes').innerHTML = Icons.svg('swap', 15);
     $id('swap-axes').addEventListener('click', swapAxes);
     $id('clear-filters').addEventListener('click', () => clearFilter(null));
     $id('field-search').addEventListener('input', filterFieldList);
+    // Accordéon du DSFR : seul composant interactif du panneau, ouvert et fermé ici sans le
+    // JavaScript du DSFR (qui enregistre chaque case à cocher et ralentit les longues listes de filtre)
+    document.querySelectorAll('#config .fr-accordion__btn').forEach(btn => btn.addEventListener('click', () => {
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(open));
+      $id(btn.getAttribute('aria-controls')).classList.toggle('fr-collapse--expanded', open);
+    }));
     $id('cfg-done').addEventListener('click', () => app.closeConfig());
     $id('cfg-revert').addEventListener('click', () => app.revert());
 
@@ -45,19 +51,13 @@ const TCDConfig = (function () {
     }, true);
   }
 
+  /** Bouton segmenté du DSFR (boutons radio) : choix de l'utilisateur */
   function segmented(root, onPick) {
-    root.addEventListener('click', e => {
-      const b = e.target.closest('button[data-value]');
-      if (b) { onPick(b.dataset.value); }
-    });
+    root.addEventListener('change', e => { if (e.target.type === 'radio') { onPick(e.target.value); } });
   }
 
   function setSegmented(root, value) {
-    root.querySelectorAll('button[data-value]').forEach(b => {
-      const on = b.dataset.value === value;
-      b.classList.toggle('is-active', on);
-      b.setAttribute('aria-checked', on);
-    });
+    root.querySelectorAll('input[type="radio"]').forEach(r => { r.checked = r.value === value; });
   }
 
   /** Choisit le rendu dans la liste de pivotUI, qui recalcule le tableau */
@@ -84,16 +84,23 @@ const TCDConfig = (function () {
     $('#slot-unused').append(unused.removeClass('pvtVertList pvtHorizList'));
     $('#slot-rows').append(ui.find('td.pvtRows'));
     $('#slot-cols').append(ui.find('td.pvtCols').removeClass('pvtHorizList'));
-    $('#slot-row-order').append(ui.find('a.pvtRowOrder').addClass('btn order-btn'));
-    $('#slot-col-order').append(ui.find('a.pvtColOrder').addClass('btn order-btn'));
+    // Tris de pivotUI habillés en boutons du DSFR
+    const orderClasses = 'fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-right fr-icon-arrow-up-down-line order-btn';
+    $('#slot-row-order').append(ui.find('a.pvtRowOrder').addClass(orderClasses));
+    $('#slot-col-order').append(ui.find('a.pvtColOrder').addClass(orderClasses));
+    // Le DSFR présente un lien sans href comme désactivé : on lui en donne un, sans navigation
+    host.find('a.order-btn').attr('href', '#').on('click', e => e.preventDefault());
     host.find('a.order-btn').on('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } });
     $('#slot-vals').append(ui.find('td.pvtVals'));
     $('#slot-renderer').append(ui.find('select.pvtRenderer').closest('td'));
-    $('#output').append(ui.find('td.pvtRendererArea'));
+    // Le tableau rendu s'inscrit dans la structure du tableau DSFR (fr-table__content)
+    $('#table-scroll').append(ui.find('td.pvtRendererArea').addClass('fr-table__content'));
     ui.remove();
 
     host.find('td.pvtVals br').remove();
-    groupAggregators(host.find('select.pvtAggregator'));
+    const agg = host.find('select.pvtAggregator').attr('id', 'agg-select');
+    agg.before(el('label', { class: 'fr-label', for: 'agg-select' }, 'Calcul'));
+    groupAggregators(agg);
 
     const fields = new Map(app.fields().map(f => [f.name, f]));
     host.find('.pvtAxisContainer li').each((_i, li) => decorateChip(li, fields));
@@ -130,19 +137,20 @@ const TCDConfig = (function () {
       return og;
     });
     const others = el('optgroup', { label: 'Autres' }, [...known].map(n => el('option', { value: n }, TCDAggregators.LABELS[n] || n)));
-    select.empty().append(groups, known.size ? others : []).val(current).addClass('input');
+    select.empty().append(groups, known.size ? others : []).val(current).addClass('fr-select');
   }
 
   function typeBadge(field) {
     if (field && field.type === 'number') { return el('span', { class: 'ft ft-number', title: 'Nombre' }, '#'); }
-    if (field && field.type === 'date') { return el('span', { class: 'ft ft-date', title: 'Date', html: Icons.svg('calendar', 11) }); }
+    if (field && field.type === 'date') { return el('span', { class: 'ft ft-date', title: 'Date', html: Icons.get('calendar', 11) }); }
     return el('span', { class: 'ft ft-text', title: 'Texte' }, 'Aa');
   }
 
   function decorateChip(li, fields) {
     const attr = attrOf(li);
     const field = fields.get(attr);
-    li.classList.add('chip');
+    // Tag du DSFR, déplaçable par pivotUI
+    li.classList.add('chip', 'fr-tag', 'fr-tag--sm');
     li.dataset.attr = attr;
     if (field && field.parent) { li.classList.add('is-derived'); }
     li.tabIndex = 0;
@@ -150,11 +158,11 @@ const TCDConfig = (function () {
     li.title = field && field.parent ? `${field.parent} regroupé par ${attr.split(' › ').pop().toLowerCase()}` : attr;
     li.prepend(typeBadge(field));
     const triangle = li.querySelector('.pvtTriangle');
-    triangle.innerHTML = Icons.svg('filter', 12);
+    triangle.innerHTML = Icons.get('filter', 12);
     triangle.title = 'Filtrer les valeurs';
     triangle.addEventListener('click', placeFilterBox);
     li.append(el('button', {
-      type: 'button', class: 'chip-btn chip-remove', title: 'Retirer', 'aria-label': `Retirer ${attr}`, html: Icons.svg('x', 12),
+      type: 'button', class: 'chip-btn chip-remove', title: 'Retirer', 'aria-label': `Retirer ${attr}`, html: Icons.get('x', 12),
       onclick: e => { e.stopPropagation(); moveTo(attr, 'unused'); },
     }));
     li.addEventListener('click', e => {
@@ -209,41 +217,52 @@ const TCDConfig = (function () {
   // Fenêtres de filtre de pivotUI
   // ---------------------------------------------------------------------------
 
+  /** Fenêtre de filtre de pivotUI habillée avec les champs et boutons du DSFR */
   function decorateFilterBox(box) {
-    box.classList.add('filter-pop');
-    box.querySelectorAll('input.pvtSearch').forEach(i => { i.type = 'search'; i.classList.add('input'); });
-    box.querySelectorAll('p:not(:last-child) button').forEach(b => b.classList.add('link-btn'));
+    box.querySelectorAll('input.pvtSearch').forEach(i => {
+      i.type = 'search';
+      i.classList.add('fr-input');
+      i.setAttribute('aria-label', 'Rechercher une valeur');
+    });
+    box.querySelectorAll('p:not(:last-child) button').forEach(b => b.classList.add('fr-btn', 'fr-btn--tertiary-no-outline', 'fr-btn--sm'));
     const final = box.querySelectorAll(':scope > p:last-child button');
-    final.forEach((b, i) => b.classList.add('btn', i === 0 && final.length > 1 ? 'btn-primary' : 'btn-ghost'));
+    final.forEach((b, i) => b.classList.add('fr-btn', 'fr-btn--sm', ...(i === 0 && final.length > 1 ? [] : ['fr-btn--secondary'])));
     box.querySelectorAll('span.count').forEach(s => { s.textContent = s.textContent.replace(/[()]/g, ''); });
     // Trop de valeurs : pivotUI n'a pas construit la liste, on propose de la construire
     if (!box.querySelector('.pvtCheckContainer')) {
       const attr = box.querySelector('h4 > span').textContent;
       box.querySelector('h4').after(el('p', { class: 'fp-many' },
         'Ce champ a beaucoup de valeurs : leur liste n’est construite qu’à la demande.',
-        el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => app.showAllFilterValues(attr) }, 'Afficher toutes les valeurs')));
+        el('button', { type: 'button', class: 'fr-btn fr-btn--secondary fr-btn--sm', onclick: () => app.showAllFilterValues(attr) }, 'Afficher toutes les valeurs')));
       box.querySelectorAll(':scope > p:not(.fp-many)').forEach(p => { if (!p.querySelector('button')) { p.remove(); } });
     }
   }
 
+  let checkboxSeq = 0;
   /**
-   * « seulement » : ne garde que cette valeur, en marquant les cases modifiées comme le fait pivotUI.
-   * Ajouté à la première ouverture : à la construction, chaque insertion dans ces listes est très lente.
+   * Liste des valeurs en cases à cocher du DSFR (case avant son libellé), avec « seulement » qui ne
+   * garde que cette valeur en marquant les cases modifiées comme le fait pivotUI. Faite à la première
+   * ouverture : à la construction, chaque insertion dans ces listes est très lente.
+   * La recherche de pivotUI masque toujours le parent du libellé, désormais le groupe DSFR.
    */
-  function addOnlyButtons(box) {
+  function decorateValueList(box) {
     if (box.dataset.decorated) { return; }
     box.dataset.decorated = '1';
     const inputs = [...box.querySelectorAll('input.pvtFilter')];
-    box.querySelectorAll('.pvtCheckContainer label').forEach(label => {
-      const own = label.querySelector('input.pvtFilter');
-      if (label.querySelector('.value').textContent === TCDData.EMPTY) { label.classList.add('is-empty'); }
-      label.insertBefore(el('button', {
-        type: 'button', class: 'fp-only', title: 'Ne garder que cette valeur',
+    box.querySelectorAll('.pvtCheckContainer > p > label').forEach(label => {
+      const input = label.querySelector('input.pvtFilter');
+      const group = el('div', { class: 'fr-checkbox-group fr-checkbox-group--sm' + (label.querySelector('.value').textContent === TCDData.EMPTY ? ' is-empty' : '') });
+      input.id = 'pvt-value-' + (++checkboxSeq);
+      label.className = 'fr-label';
+      label.htmlFor = input.id;
+      label.parentNode.replaceChild(group, label);
+      group.append(input, label, el('button', {
+        type: 'button', class: 'fp-only fr-btn fr-btn--tertiary-no-outline fr-btn--sm', title: 'Ne garder que cette valeur',
         onclick: e => {
           e.preventDefault();
-          inputs.forEach(i => { if (i.checked !== (i === own)) { i.checked = i === own; $(i).toggleClass('changed'); } });
+          inputs.forEach(i => { if (i.checked !== (i === input)) { i.checked = i === input; $(i).toggleClass('changed'); } });
         },
-      }, 'seulement'), label.querySelector('.count'));
+      }, 'seulement'));
     });
   }
 
@@ -268,7 +287,7 @@ const TCDConfig = (function () {
   function placeFilterBox(e) {
     const box = boxOf(e.currentTarget.closest('li'));
     const visible = el => el && el.isConnected && el.getClientRects().length > 0;
-    addOnlyButtons(box);
+    decorateValueList(box);
     const anchor = visible(pendingAnchor) ? pendingAnchor : e.currentTarget;
     pendingAnchor = null;
     document.querySelectorAll('#filter-layer .pvtFilterBox').forEach(b => { if (b !== box) { b.style.display = 'none'; } });
@@ -303,17 +322,16 @@ const TCDConfig = (function () {
   /** Pastille de filtre actif (réutilisée dans la barre de consultation) */
   function filterPill(attr, count, compact) {
     const pill = el('span', { class: 'filter-pill' + (compact ? ' is-compact' : '') });
+    // Tag du DSFR pour modifier le filtre, bouton icône du DSFR pour le supprimer
     const open = el('button', {
-      type: 'button', class: 'filter-pill-main', title: 'Modifier le filtre',
-      html: Icons.svg('filter', 12) + '<span></span>',
+      type: 'button', class: 'filter-pill-main fr-tag fr-tag--sm fr-tag--icon-left fr-icon-filter-line', title: 'Modifier le filtre',
       // Dans une popover, la pastille disparaît à l'ouverture du filtre : on ancre sur le bouton de résumé
       onclick: () => openFilter(attr, compact ? (document.querySelector('.sum-filters') || pill) : pill),
-    });
-    open.querySelector('span').textContent = `${attr} · ${count} masquée${count > 1 ? 's' : ''}`;
+    }, `${attr} · ${count} masquée${count > 1 ? 's' : ''}`);
     const clear = el('button', {
-      type: 'button', class: 'filter-pill-clear', title: 'Supprimer ce filtre', html: Icons.svg('x', 12),
+      type: 'button', class: 'filter-pill-clear fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-close-line', title: 'Supprimer ce filtre',
       onclick: () => { UI.closePopover(); clearFilter(attr); },
-    });
+    }, 'Supprimer ce filtre');
     pill.append(open, clear);
     return pill;
   }
@@ -333,10 +351,11 @@ const TCDConfig = (function () {
     const labels = TCDAggregators.inputLabels(pvt.aggregatorName);
     const numeric = app.fields().filter(f => f.type === 'number').map(f => f.name);
     let filled = false;
-    $host.find('td.pvtVals .field-label').remove();
+    $host.find('td.pvtVals label.val-label').remove();
     $host.find('select.pvtAttrDropdown').each((i, sel) => {
-      sel.classList.add('input');
-      sel.before(el('span', { class: 'field-label' }, labels[i] || 'Champ'));
+      sel.classList.add('fr-select');
+      sel.id = 'val-select-' + i;
+      sel.before(el('label', { class: 'fr-label val-label', for: sel.id }, labels[i] || 'Champ'));
       if (!sel.value && numeric.length) {
         sel.value = numeric.find(n => !pvt.vals.includes(n)) || numeric[0];
         filled = true;
