@@ -160,6 +160,9 @@ await test('clic sur une case : filtre les vues liées (comme un point de la car
   await cell.click();
   assert(await page.evaluate(() => window.__mockGrist.selected) === null, 'second clic : les vues liées doivent tout réafficher');
   await cell.click();
+  await page.click('#btn-export');
+  await page.keyboard.press('Escape');
+  assert(await page.evaluate(() => window.__mockGrist.selected) !== null, 'Échap qui ferme un menu ne doit pas désélectionner');
   await page.click('.sum-selection');
   assert(await page.evaluate(() => window.__mockGrist.selected) === null && await page.locator('.sum-selection').count() === 0, 'la croix de la pastille doit désélectionner');
   await cell.click();

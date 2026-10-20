@@ -857,9 +857,10 @@ function handleOptions(options) {
 function start() {
   $id('btn-display').addEventListener('click', e => openDisplayMenu(e.currentTarget));
   $id('btn-export').addEventListener('click', e => openExportMenu(e.currentTarget));
+  // Échap désélectionne, sauf s'il ferme d'abord un menu (vérifié avant que le menu ne se ferme)
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && $id('popover').hidden) { clearSelection(); }
-  });
+  }, true);
 
   showMessage('fr-icon-table-line', 'Chargement des données…', '');
   $id('output').classList.add('is-loading');
