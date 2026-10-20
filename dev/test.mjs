@@ -396,6 +396,8 @@ await test('export Excel : formats Grist, sous-totaux en plan, totaux en gras, e
   const total = find('Total');
   assert(total && ws.getRow(total.r).getCell(2).font.bold, 'ligne Total en gras attendue');
   assert(find('Annee →'), 'en-tête de colonnes absent');
+  // Chaque ligne porte son chemin complet (la région est répétée sur ses lignes de détail)
+  assert(ws.getRow(ara.r + 1).getCell(1).value === 'Auvergne-Rhône-Alpes' && ws.getRow(ara.r + 1).getCell(2).value, 'région non répétée sur les lignes de détail');
   assert(ws.conditionalFormattings.length > 0 && ws.conditionalFormattings[0].rules[0].type === 'colorScale', 'carte de chaleur non reprise');
   assert(ws.views[0].state === 'frozen', 'volets figés attendus');
   assert(page.errors.length === 0, page.errors.join(' | '));
@@ -410,6 +412,19 @@ await test('filtres qui ne laissent aucune ligne : message, puis retour au table
   await page.click('.popover .filter-pill-clear');
   await page.waitForTimeout(300);
   assert(await page.locator('table.pvtTable').count() === 1, 'le tableau doit revenir');
+  await page.close();
+});
+
+await test('export Excel sans sous-totaux : chaque ligne porte sa région', async () => {
+  const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'], subtotals: false } });
+  await page.click('#btn-export');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.menu-item:has-text("Excel")')]);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(await dl.path());
+  const ws = wb.worksheets[0];
+  let leaves = 0, missing = 0;
+  ws.eachRow((row, r) => { if (r > 5 && row.getCell(2).value && row.getCell(1).value !== 'Total') { leaves++; if (!row.getCell(1).value) { missing++; } } });
+  assert(leaves === 40 && missing === 0, `${missing} ligne(s) sans région sur ${leaves}`);
   await page.close();
 });
 

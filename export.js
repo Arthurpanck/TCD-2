@@ -202,10 +202,13 @@ const TCDExport = (function () {
       const xrow = ws.getRow(r);
       const isGroup = row.kind === 'group', isTotal = row.kind === 'total';
       if (row.kind !== 'total') {
-        const label = row.key[row.key.length - 1];
-        const cell = xrow.getCell(row.level + 1);
-        cell.value = label;
-        if (label === TCDData.EMPTY) { cell.font = { italic: true, color: { argb: 'FF8A93A3' } }; }
+        // Chemin complet sur chaque ligne (filtres, tris, publipostage) ; les niveaux parents en gris
+        row.key.forEach((label, i) => {
+          const cell = xrow.getCell(i + 1);
+          cell.value = label;
+          const parent = i < row.key.length - 1;
+          if (parent || label === TCDData.EMPTY) { cell.font = { italic: label === TCDData.EMPTY, color: { argb: parent ? 'FFA0A7B4' : 'FF8A93A3' } }; }
+        });
         // Les lignes repliées dans le widget le sont aussi dans Excel (plan)
         if (settingsHasOutline(ctx, n)) { xrow.outlineLevel = row.level; }
         if (hiddenUnder.some(p => p.every((v, i) => row.key[i] === v) && row.key.length > p.length)) { xrow.hidden = true; }
