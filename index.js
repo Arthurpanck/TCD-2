@@ -274,7 +274,7 @@ function showResult() {
   }
   out.classList.remove('is-message');
   out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
-  TCDRender.decorate(table, { aggLabel: state.aggLabel, rowTotals: s.rowTotals, colTotals: s.colTotals, rows: pvt.rows.length, cols: pvt.cols.length });
+  TCDRender.decorate(table, { aggLabel: state.aggLabel, rowTotals: s.rowTotals, colTotals: s.colTotals, subtotals: s.subtotals, rows: pvt.rows.length, cols: pvt.cols.length });
   if (table.dataset.styleSkipped) { UI.toast('Tableau trop grand : la carte de chaleur et les barres sont désactivées.', 'info'); }
   restoreCollapsed(table);
   applyRowLimit(table);

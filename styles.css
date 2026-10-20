@@ -367,6 +367,8 @@ table.pvtTable thead th.pvtCorner {
 table.pvtTable th.colexpanded, table.pvtTable th.colcollapsed,
 table.pvtTable th.rowexpanded, table.pvtTable th.rowcollapsed,
 table.pvtTable thead th.pvtAxisLabel.expanded, table.pvtTable thead th.pvtAxisLabel.collapsed { cursor: pointer; }
+table.pvtTable.no-subtotals th { cursor: default !important; }
+table.pvtTable.no-subtotals th:hover { color: inherit !important; }
 table.pvtTable thead th.pvtAxisLabel.expanded:hover, table.pvtTable thead th.pvtAxisLabel.collapsed:hover,
 table.pvtTable th.rowexpanded:hover, table.pvtTable th.rowcollapsed:hover,
 table.pvtTable th.colexpanded:hover, table.pvtTable th.colcollapsed:hover { color: var(--accent-strong); }

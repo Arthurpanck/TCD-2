@@ -106,6 +106,7 @@ const TCDRender = (function () {
    */
   function decorate(table, ctx) {
     table.classList.add('tcd-table');
+    table.classList.toggle('no-subtotals', !ctx.subtotals);
     table.classList.toggle('hide-row-totals', !ctx.rowTotals && ctx.cols > 0);
     table.classList.toggle('hide-col-totals', !ctx.colTotals && ctx.rows > 0);
     bars(table);
