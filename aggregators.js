@@ -7,29 +7,28 @@ const TCDAggregators = (function () {
   const tpl = $.pivotUtilities.aggregatorTemplates;
   const subTpl = $.pivotUtilities.subtotalAggregatorTemplates;
   const frPct = $.pivotUtilities.numberFormat({ digitsAfterDecimal: 1, scaler: 100, suffix: ' %', thousandsSep: ' ', decimalSep: ',' });
-  const frFmt = $.pivotUtilities.numberFormat({ thousandsSep: ' ', decimalSep: ',' });
 
-  function wavg(n) {
-    if (!n) { return; }
-    n = n.filter(([note]) => typeof (note) === 'number');
-    if (n.length) { return n.map(([note, coef]) => note * coef).reduce((a, b) => a + b) / n.map(([_note, coef]) => coef).reduce((a, b) => a + b); }
-  }
-
-  function weightedAverage([val, coef]) {
-    return (_data, _rowKey, _colKey) => ({
-      values: [],
-      push: function (rec) { this.values.push([rec[val], rec[coef]]); },
-      value: function () { return wavg(this.values); },
-      format: function (x) { return (Math.round(x * 100) / 100).toFixed(2); },
-      numInputs: 2
+  /** Moyenne pondérée (absente de pivottable), écrite comme ses modèles d'agrégateurs */
+  function weightedAverage([val, coef] = []) {
+    return () => ({
+      sum: 0,
+      weight: 0,
+      push(rec) {
+        const v = parseFloat(rec[val]), w = parseFloat(rec[coef]);
+        if (isFinite(v) && isFinite(w)) { this.sum += v * w; this.weight += w; }
+      },
+      value() { return this.weight ? this.sum / this.weight : null; },
+      format: x => String(x),
+      numInputs: 2,
     });
   }
 
   const catalogue = Object.assign({}, $.pivotUtilities.locales.fr.aggregators, {
     'Moyenne pondérée': weightedAverage,
-    'Médiane': tpl.median(frFmt),
-    'Variance': tpl.var(1, frFmt),
-    'Écart-type': tpl.stdev(1, frFmt),
+    // Le format est remplacé par celui de Grist (forUI)
+    'Médiane': tpl.median(),
+    'Variance': tpl.var(1),
+    'Écart-type': tpl.stdev(1),
     // Proportions relatives au groupe parent : fournies par subtotal.js
     'Somme en proportion du groupe (lignes)': subTpl.fractionOf(tpl.sum(), 'row', frPct),
     'Somme en proportion du groupe (colonnes)': subTpl.fractionOf(tpl.sum(), 'col', frPct),
@@ -158,5 +157,5 @@ const TCDAggregators = (function () {
     return `${label} de ${L(v[0])}`;
   }
 
-  return { catalogue, GROUPS, LABELS, normalizeName, numInputs, inputLabels, kind, forUI, describe };
+  return { GROUPS, LABELS, normalizeName, inputLabels, forUI, describe };
 })();

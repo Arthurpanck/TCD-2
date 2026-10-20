@@ -27,7 +27,6 @@ const DEFAULTS = {
 // Réglages des versions précédentes qui n'existent plus (graphique, format des nombres, couleur d'accent)
 const OBSOLETE = ['chartType', 'decimals', 'scale', 'suffix', 'accent'];
 const ORDERS = ['key_a_to_z', 'value_a_to_z', 'value_z_to_a'];
-const RENDERERS = ['Table', 'Table avec barres', 'Carte de chaleur', 'Carte de chaleur par ligne', 'Carte de chaleur par colonne'];
 const DENSITIES = ['compact', 'standard', 'comfortable'];
 
 const state = {
@@ -59,7 +58,7 @@ function normalizeSettings(raw, legacy = {}) {
   s.cols = list(s.cols);
   s.vals = list(s.vals);
   s.aggregatorName = TCDAggregators.normalizeName(s.aggregatorName);
-  s.rendererName = RENDERERS[RENDERERS.indexOf(s.rendererName)] || TCDConfig.rendererName(rendererOf(s.rendererName).kind, rendererOf(s.rendererName).scope);
+  s.rendererName = TCDRender.normalizeName(s.rendererName);
   const ex = {};
   for (const [k, v] of Object.entries(s.exclusions || {})) {
     if (Array.isArray(v) && v.length) { ex[k] = v.map(String); }
@@ -81,23 +80,14 @@ function normalizeSettings(raw, legacy = {}) {
   return s;
 }
 
-function rendererOf(name) {
-  switch (name) {
-    case 'Carte de chaleur': case 'Heatmap': return { kind: 'heat', scope: 'all' };
-    case 'Carte de chaleur par ligne': case 'Row Heatmap': return { kind: 'heat', scope: 'row' };
-    case 'Carte de chaleur par colonne': case 'Col Heatmap': return { kind: 'heat', scope: 'col' };
-    case 'Table avec barres': case 'Table Barchart': return { kind: 'bars', scope: 'all' };
-    default: return { kind: 'table', scope: 'all' };
-  }
-}
-
 /** Réglages modifiés depuis le panneau (hors pivotUI) */
 function update(patch) {
   state.settings = normalizeSettings({ ...state.settings, ...patch });
   applyAppearance();
   scheduleSave();
-  if (['subtotals', 'rowTotals', 'colTotals', 'density', 'fontScale'].some(k => k in patch)) { refreshPivot(); }
-  else if (state.pvt) { TCDConfig.sync(state.pvt); }
+  if (['subtotals', 'rowTotals', 'colTotals'].some(k => k in patch)) { refreshPivot(); return; }
+  if (state.pvt) { TCDConfig.sync(state.pvt); }
+  if ('density' in patch || 'fontScale' in patch) { requestAnimationFrame(restick); }
 }
 
 function scheduleSave() {
@@ -276,15 +266,14 @@ function showResult() {
   renderSummary(s);
 }
 
-function showMessage(icon, title, text, action) {
+function showMessage(icon, title, text) {
   const out = $id('output');
   out.classList.add('is-message');
   out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
   out.append(el('div', { class: 'empty' },
     el('div', { class: 'empty-icon', html: Icons.svg(icon, 26) }),
     el('h3', {}, title),
-    el('p', {}, text),
-    action ? el('button', { type: 'button', class: 'btn btn-primary', onclick: action.onClick, html: Icons.svg('settings', 15) + `<span>${action.label}</span>` }) : null));
+    el('p', {}, text)));
 }
 
 function renderSummary(s) {
@@ -569,7 +558,7 @@ function selectRows(ids) {
 function openDisplayMenu(anchor) {
   if (UI.isOpenFor(anchor)) { return UI.closePopover(); }
   const s = state.settings;
-  const r = rendererOf(s.rendererName);
+  const r = TCDRender.kindOf(s.rendererName);
   // Rouvre le menu pour refléter le nouveau réglage
   const reopen = () => { UI.closePopover(); openDisplayMenu(anchor); };
   const seg = (items, current, onPick) => el('div', { class: 'segmented' }, items.map(([v, l]) =>
@@ -577,7 +566,7 @@ function openDisplayMenu(anchor) {
   const root = el('div', { class: 'menu display-menu' },
     el('div', { class: 'menu-title' }, 'Mise en forme'),
     seg([['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']], r.kind,
-      v => TCDConfig.setRenderer(TCDConfig.rendererName(v, r.scope))),
+      v => TCDConfig.setRenderer(TCDRender.nameOf(v, r.scope))),
     s.subtotals && s.rows.length > 1 ? el('div', { class: 'menu-title' }, 'Groupes') : null,
     s.subtotals && s.rows.length > 1 ? el('div', { class: 'segmented' },
       el('button', { type: 'button', onclick: () => { setAllCollapsed(true); UI.closePopover(); } }, 'Tout replier'),
@@ -716,7 +705,6 @@ const app = {
   fields: () => (state.dataset ? state.dataset.fields : []),
   update,
   refreshPivot,
-  rendererOf,
   closeConfig,
   revert,
 };

@@ -4,6 +4,21 @@
  */
 const TCDRender = (function () {
   const { EMPTY } = TCDData;
+  // Noms des rendus (locale française de pivottable) et noms anglais des anciennes versions
+  const KINDS = {
+    'Table': ['table', 'all'],
+    'Table avec barres': ['bars', 'all'],
+    'Carte de chaleur': ['heat', 'all'],
+    'Carte de chaleur par ligne': ['heat', 'row'],
+    'Carte de chaleur par colonne': ['heat', 'col'],
+  };
+  const LEGACY = { 'Table Barchart': 'Table avec barres', 'Heatmap': 'Carte de chaleur', 'Row Heatmap': 'Carte de chaleur par ligne', 'Col Heatmap': 'Carte de chaleur par colonne' };
+
+  /** Nom de rendu valide (les noms inconnus ou obsolètes donnent « Table ») */
+  const normalizeName = name => (KINDS[name] ? name : LEGACY[name] || 'Table');
+  /** @returns {{kind: 'table'|'heat'|'bars', scope: 'all'|'row'|'col'}} */
+  const kindOf = name => { const [kind, scope] = KINDS[normalizeName(name)]; return { kind, scope }; };
+  const nameOf = (kind, scope) => Object.keys(KINDS).find(n => KINDS[n][0] === kind && (kind !== 'heat' || KINDS[n][1] === scope)) || 'Table';
   const subtotalTable = $.pivotUtilities.subtotal_renderers['Table With Subtotal'];
 
   /** Couleur d'une variable CSS du thème courant (rgb) */
@@ -151,5 +166,5 @@ const TCDRender = (function () {
     });
   }
 
-  return { renderers, decorate, stick };
+  return { normalizeName, kindOf, nameOf, renderers, decorate, stick };
 })();

@@ -339,6 +339,38 @@ await test('« Annuler » restaure la configuration d’ouverture', async () => 
   await page.close();
 });
 
+await test('ordre français des valeurs (accents) et valeurs vides en dernier', async () => {
+  const page = await open({ settings: { ...base, cols: [] } });
+  const regions = (await page.locator('tbody th.pvtRowLabel').allTextContents()).map(t => t.trim());
+  assert(regions.indexOf('Île-de-France') === regions.indexOf('Hauts-de-France') + 1, 'Île-de-France doit suivre Hauts-de-France : ' + regions.join('|'));
+  await page.close();
+});
+
+await test('filtre : « seulement » ne garde qu’une valeur', async () => {
+  const page = await open({ settings: base });
+  await page.evaluate(() => grist.__openConfig());
+  await page.locator('#slot-rows .pvtTriangle').first().click();
+  const box = page.locator('#filter-layer .pvtFilterBox:visible');
+  const label = box.locator('label', { hasText: 'Bretagne' });
+  await label.hover();
+  await label.locator('.fp-only').click();
+  await box.locator('.btn-primary').click();
+  await page.waitForTimeout(500);
+  const rows = await page.locator('tbody th.pvtRowLabel').allTextContents();
+  assert(rows.length === 1 && rows[0].includes('Bretagne'), 'lignes : ' + rows.join('|'));
+  const s = await savedSettings(page);
+  assert(s && s.exclusions.Region.length === 7, 'exclusions : ' + JSON.stringify(s && s.exclusions));
+  await page.close();
+});
+
+await test('densité : pas de recalcul du tableau', async () => {
+  const page = await open({ settings: base });
+  const before = await page.evaluate(() => { window.__t = document.querySelector('table.pvtTable'); update({ density: 'compact' }); return 1; });
+  await page.waitForTimeout(300);
+  assert(await page.evaluate(() => document.querySelector('table.pvtTable') === window.__t), 'le tableau ne doit pas être recalculé');
+  await page.close();
+});
+
 for (const width of [360, 600, 1024]) {
   await test(`pas de débordement horizontal de la page à ${width}px (consultation et configuration)`, async () => {
     const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'] } }, { width, height: 700 });

@@ -25,8 +25,8 @@ const TCDConfig = (function () {
     $id('col-totals').addEventListener('change', e => app.update({ colTotals: e.target.checked }));
     $id('subtotals').addEventListener('change', e => app.update({ subtotals: e.target.checked }));
     $id('click-detail').addEventListener('change', e => app.update({ clickDetail: e.target.checked }));
-    $id('heat-scope').addEventListener('change', e => setRenderer(rendererName('heat', e.target.value)));
-    segmented($id('renderer-seg'), v => setRenderer(rendererName(v, $id('heat-scope').value)));
+    $id('heat-scope').addEventListener('change', e => setRenderer(TCDRender.nameOf('heat', e.target.value)));
+    segmented($id('renderer-seg'), v => setRenderer(TCDRender.nameOf(v, $id('heat-scope').value)));
     segmented($id('density-seg'), v => app.update({ density: v }));
 
     $id('swap-axes').innerHTML = Icons.svg('swap', 15);
@@ -63,14 +63,6 @@ const TCDConfig = (function () {
       b.classList.toggle('is-active', on);
       b.setAttribute('aria-checked', on);
     });
-  }
-
-  /** Nom pivottable (français) du rendu */
-  function rendererName(kind, scope) {
-    if (kind === 'heat') {
-      return { row: 'Carte de chaleur par ligne', col: 'Carte de chaleur par colonne' }[scope] || 'Carte de chaleur';
-    }
-    return kind === 'bars' ? 'Table avec barres' : 'Table';
   }
 
   /** Choisit le rendu dans la liste de pivotUI, qui recalcule le tableau */
@@ -226,6 +218,19 @@ const TCDConfig = (function () {
     const final = box.querySelectorAll(':scope > p:last-child button');
     final.forEach((b, i) => b.classList.add('btn', i === 0 && final.length > 1 ? 'btn-primary' : 'btn-ghost'));
     box.querySelectorAll('span.count').forEach(s => { s.textContent = s.textContent.replace(/[()]/g, ''); });
+    // « seulement » : ne garde que cette valeur, en marquant les cases modifiées comme le fait pivotUI
+    const inputs = [...box.querySelectorAll('input.pvtFilter')];
+    box.querySelectorAll('.pvtCheckContainer label').forEach(label => {
+      const own = label.querySelector('input.pvtFilter');
+      if (label.querySelector('.value').textContent === TCDData.EMPTY) { label.classList.add('is-empty'); }
+      label.querySelector('.value').after(el('button', {
+        type: 'button', class: 'fp-only', title: 'Ne garder que cette valeur',
+        onclick: e => {
+          e.preventDefault();
+          inputs.forEach(i => { if (i.checked !== (i === own)) { i.checked = i === own; $(i).toggleClass('changed'); } });
+        },
+      }, 'seulement'));
+    });
   }
 
   const openBox = () => [...document.querySelectorAll('#filter-layer .pvtFilterBox')].find(b => b.style.display !== 'none');
@@ -332,7 +337,7 @@ const TCDConfig = (function () {
       li.querySelector('.pvtTriangle').dataset.count = ex && ex.length ? ex.length : '';
     });
 
-    const r = app.rendererOf(pvt.rendererName);
+    const r = TCDRender.kindOf(pvt.rendererName);
     setSegmented($id('renderer-seg'), r.kind);
     $id('heat-scope-field').hidden = r.kind !== 'heat';
     $id('heat-scope').value = r.scope;
@@ -346,5 +351,5 @@ const TCDConfig = (function () {
       : "Les nombres s'affichent au format par défaut de Grist. Pour reprendre le format de la colonne (devise, %, décimales), donnez au widget l'accès complet au document.";
   }
 
-  return { init, adopt, sync, openFilter, filterPill, rendererName, setRenderer, closeFilters: closeFilterBoxes };
+  return { init, adopt, sync, openFilter, filterPill, setRenderer, closeFilters: closeFilterBoxes };
 })();

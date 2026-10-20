@@ -60,6 +60,15 @@ const TCDData = (function () {
   }
   const daySorter = (a, b) => dayKey(a) - dayKey(b) || (a < b ? -1 : a > b ? 1 : 0);
 
+  const collator = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' });
+  function frenchSort(a, b) {
+    if (a === b) { return 0; }
+    if (a === EMPTY) { return 1; }
+    if (b === EMPTY) { return -1; }
+    if (typeof a === 'number' && typeof b === 'number') { return a - b; }
+    return collator.compare(String(a), String(b));
+  }
+
   /**
    * @param {Array<Object>} rawRecords - enregistrements reçus de grist.onRecords
    * @returns {{records, fields, derivedAttributes, sorters, toAttr, fromAttr}}
@@ -125,6 +134,9 @@ const TCDData = (function () {
       sorters[name + DERIVED_SEP + 'Mois'] = sortAs(monthOrder);
       sorters[name + DERIVED_SEP + 'Trimestre'] = sortAs(quarterOrder);
     }
+
+    // Autres champs : ordre français (accents, nombres dans le texte), valeurs vides en dernier
+    for (const f of fields) { if (!sorters[f.name]) { sorters[f.name] = frenchSort; } }
 
     /** Identifiant enregistré (colonne ou « colonne › Année ») → nom affiché */
     const toAttr = key => {
