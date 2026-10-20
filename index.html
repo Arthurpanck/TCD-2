@@ -19,7 +19,7 @@
   <body>
     <div id="app">
 
-      <!-- Panneau de configuration : ouvert via « Ouvrir la configuration » dans le panneau Grist -->
+      <!-- Panneau de configuration, au-dessus du tableau : ouvert via « Ouvrir la configuration » dans le panneau Grist -->
       <aside id="config" aria-label="Configuration du tableau croisé" hidden>
         <div class="cfg-head">
           <div class="cfg-title">
@@ -32,70 +32,66 @@
           </ul>
         </div>
 
-        <!-- Poignée de redimensionnement du panneau -->
-        <div id="cfg-resizer" class="cfg-resizer" role="separator" aria-orientation="vertical" aria-controls="config"
-             aria-label="Largeur de la configuration" aria-valuemin="260" tabindex="0"
-             title="Glisser pour redimensionner (double-clic : largeur par défaut)"></div>
-
+        <!-- Trois colonnes : champs, disposition, affichage. Le tableau reste visible en dessous. -->
         <div class="cfg-body">
-          <section class="cfg-section">
-            <div class="fr-input-group fr-mb-0">
-              <label class="fr-label cfg-heading" for="table-title">Titre du tableau
-                <span class="fr-hint-text">Facultatif : affiché au-dessus du tableau et repris dans l'export Excel.</span>
-              </label>
-              <input class="fr-input" type="text" id="table-title" maxlength="200" autocomplete="off">
-            </div>
-          </section>
+          <div class="cfg-col cfg-col--fields">
+            <section class="cfg-section cfg-section--grow">
+              <div class="cfg-section-head">
+                <h3 class="cfg-heading">Champs disponibles</h3>
+                <span id="field-count" class="fr-hint-text"></span>
+              </div>
+              <div class="fr-search-bar fr-search-bar--sm" role="search">
+                <label class="fr-label" for="field-search">Rechercher un champ</label>
+                <input class="fr-input" type="search" id="field-search" placeholder="Rechercher un champ" autocomplete="off">
+              </div>
+              <div id="slot-unused" class="slot"></div>
+              <p class="fr-hint-text fr-mt-1w fr-mb-0">Glissez un champ vers Lignes ou Colonnes, ou cliquez dessus.</p>
+            </section>
+          </div>
 
-          <section class="cfg-section">
-            <div class="cfg-section-head">
-              <h3 class="cfg-heading">Champs disponibles</h3>
-              <span id="field-count" class="fr-hint-text"></span>
-            </div>
-            <div class="fr-search-bar fr-search-bar--sm" role="search">
-              <label class="fr-label" for="field-search">Rechercher un champ</label>
-              <input class="fr-input" type="search" id="field-search" placeholder="Rechercher un champ" autocomplete="off">
-            </div>
-            <div id="slot-unused" class="slot"></div>
-            <p class="fr-hint-text fr-mt-1w fr-mb-0">Glissez un champ vers Lignes ou Colonnes, ou cliquez dessus.</p>
-          </section>
+          <div class="cfg-col">
+            <section class="cfg-section">
+              <div class="cfg-section-head">
+                <h3 class="cfg-heading">Lignes</h3>
+                <button type="button" id="swap-axes" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-arrow-left-right-line" title="Inverser lignes et colonnes">Inverser lignes et colonnes</button>
+              </div>
+              <div id="slot-rows" class="slot"></div>
+            </section>
 
-          <section class="cfg-section">
-            <div class="cfg-section-head">
-              <h3 class="cfg-heading">Lignes</h3>
-              <button type="button" id="swap-axes" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-arrow-left-right-line" title="Inverser lignes et colonnes">Inverser lignes et colonnes</button>
-            </div>
-            <div id="slot-rows" class="slot"></div>
-          </section>
+            <section class="cfg-section">
+              <div class="cfg-section-head">
+                <h3 class="cfg-heading">Colonnes</h3>
+              </div>
+              <div id="slot-cols" class="slot"></div>
+            </section>
 
-          <section class="cfg-section">
-            <div class="cfg-section-head">
-              <h3 class="cfg-heading">Colonnes</h3>
-            </div>
-            <div id="slot-cols" class="slot"></div>
-          </section>
+            <section class="cfg-section">
+              <div class="cfg-section-head">
+                <h3 class="cfg-heading">Valeurs</h3>
+              </div>
+              <div id="slot-vals" class="slot-vals"></div>
+              <p class="fr-hint-text fr-mt-1w fr-mb-0" id="format-hint"></p>
+            </section>
 
-          <section class="cfg-section">
-            <div class="cfg-section-head">
-              <h3 class="cfg-heading">Valeurs</h3>
-            </div>
-            <div id="slot-vals" class="slot-vals"></div>
-            <p class="fr-hint-text fr-mt-1w fr-mb-0" id="format-hint"></p>
-          </section>
+            <section class="cfg-section" id="filters-section">
+              <div class="cfg-section-head">
+                <h3 class="cfg-heading">Filtres actifs</h3>
+                <button type="button" id="clear-filters" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm">Tout effacer</button>
+              </div>
+              <div id="active-filters" class="filter-list"></div>
+            </section>
+          </div>
 
-          <section class="cfg-section" id="filters-section">
-            <div class="cfg-section-head">
-              <h3 class="cfg-heading">Filtres actifs</h3>
-              <button type="button" id="clear-filters" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm">Tout effacer</button>
-            </div>
-            <div id="active-filters" class="filter-list"></div>
-          </section>
+          <div class="cfg-col">
+            <section class="cfg-section cfg-display">
+              <h3 class="cfg-heading">Affichage</h3>
+              <div class="fr-input-group">
+                <label class="fr-label" for="table-title">Titre du tableau
+                  <span class="fr-hint-text">Facultatif : affiché au-dessus du tableau et repris dans l'export Excel.</span>
+                </label>
+                <input class="fr-input" type="text" id="table-title" maxlength="200" autocomplete="off">
+              </div>
 
-          <section class="fr-accordion cfg-accordion">
-            <h3 class="fr-accordion__title">
-              <button type="button" class="fr-accordion__btn" aria-expanded="true" aria-controls="cfg-display">Affichage</button>
-            </h3>
-            <div class="fr-collapse fr-collapse--expanded" id="cfg-display">
               <div id="renderer-seg"></div>
 
               <div class="fr-select-group" id="heat-scope-field">
@@ -135,11 +131,16 @@
               <div id="density-seg"></div>
 
               <p class="fr-hint-text fr-mb-0">Cliquer sur une case filtre les widgets Grist liés à ce tableau (« Sélectionner par »). Cliquez de nouveau sur la case, ou appuyez sur Échap, pour tout réafficher.</p>
-            </div>
-          </section>
+            </section>
+          </div>
 
           <div id="slot-renderer" hidden></div>
         </div>
+
+        <!-- Poignée : partage de la hauteur entre la configuration et le tableau -->
+        <div id="cfg-resizer" class="cfg-resizer" role="separator" aria-orientation="horizontal" aria-controls="config"
+             aria-label="Hauteur de la configuration" aria-valuemin="200" tabindex="0"
+             title="Glisser pour partager la hauteur avec le tableau (double-clic : hauteur par défaut)"></div>
       </aside>
 
       <!-- Barre de consultation -->

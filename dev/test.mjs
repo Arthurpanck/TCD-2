@@ -510,33 +510,37 @@ await test('titre du tableau : légende du DSFR, enregistrée et reprise dans l�
   await page.close();
 });
 
-await test('configuration redimensionnable : glisser, clavier, limites et mémoire', async () => {
+await test('configuration au-dessus du tableau, hauteur réglable : glisser, clavier, limites et mémoire', async () => {
   const page = await open({ settings: base });
   await page.evaluate(() => grist.__openConfig());
-  const width = () => page.locator('#config').evaluate(n => n.offsetWidth);
-  const start = await width();
+  const height = () => page.locator('#config').evaluate(n => n.offsetHeight);
+  const cfg = await page.locator('#config').boundingBox();
+  const stage = await page.locator('#stage').boundingBox();
+  assert(stage.y > cfg.y + cfg.height - 1, 'le tableau doit être sous la configuration');
+  assert(await page.locator('.cfg-col').count() === 3, 'trois colonnes attendues');
+  const start = await height();
   const h = await page.locator('#cfg-resizer').boundingBox();
-  await page.mouse.move(h.x + h.width / 2, h.y + 200);
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
   await page.mouse.down();
-  await page.mouse.move(h.x + 150, h.y + 200, { steps: 5 });
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2 - 100, { steps: 5 });
   await page.mouse.up();
-  const dragged = await width();
-  assert(Math.abs(dragged - (start + 150 - h.width / 2)) <= 2, `largeur après glisser : ${dragged} (départ ${start})`);
+  const dragged = await height();
+  assert(Math.abs(dragged - (start - 100)) <= 2, `hauteur après glisser : ${dragged} (départ ${start})`);
   await page.locator('#cfg-resizer').focus();
-  await page.keyboard.press('ArrowLeft');
-  assert(await width() === dragged - 16, 'flèche gauche : −16 px attendus');
+  await page.keyboard.press('ArrowDown');
+  assert(await height() === dragged + 24, 'flèche bas : +24 px attendus');
   const h2 = await page.locator('#cfg-resizer').boundingBox();
-  await page.mouse.move(h2.x + h2.width / 2, h2.y + 200);
+  await page.mouse.move(h2.x + h2.width / 2, h2.y + h2.height / 2);
   await page.mouse.down();
-  await page.mouse.move(5, h2.y + 200, { steps: 5 });
+  await page.mouse.move(h2.x + h2.width / 2, 700, { steps: 5 });
   await page.mouse.up();
-  assert(await width() === 260, 'largeur minimale 260 px : ' + await width());
+  assert(await height() === 760 - 180, 'le tableau garde 180 px : ' + await height());
   await page.reload();
   await page.waitForTimeout(400);
   await page.evaluate(() => grist.__openConfig());
-  assert(await width() === 260, 'largeur non retenue après rechargement : ' + await width());
+  assert(await height() === 580, 'hauteur non retenue après rechargement : ' + await height());
   await page.dblclick('#cfg-resizer');
-  assert(await width() === 340, 'double-clic : largeur par défaut attendue');
+  assert(await height() === Math.round(760 * 0.55), 'double-clic : hauteur par défaut attendue');
   await page.close();
 });
 

@@ -45,7 +45,7 @@ Les réglages sont enregistrés automatiquement dans le widget.
 - Tri des lignes et colonnes (libellé ou valeur), totaux activables
 - Thème clair/sombre synchronisé avec Grist
 - « Annuler » pour revenir à l'état d'ouverture de la configuration
-- Panneau de configuration redimensionnable (glisser son bord, flèches du clavier ; double-clic : largeur par défaut), largeur retenue par le navigateur
+- Configuration au-dessus du tableau, en trois colonnes (champs, disposition, affichage), le tableau restant visible en dessous ; hauteur réglable en faisant glisser la poignée (flèches du clavier ; double-clic : hauteur par défaut), retenue par le navigateur
 
 Les configurations enregistrées par les versions précédentes (y compris en anglais) sont reprises automatiquement.
 

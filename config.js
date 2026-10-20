@@ -36,13 +36,6 @@ const TCDConfig = (function () {
     $id('swap-axes').addEventListener('click', swapAxes);
     $id('clear-filters').addEventListener('click', () => clearFilter(null));
     $id('field-search').addEventListener('input', filterFieldList);
-    // Accordéon du DSFR : seul composant interactif du panneau, ouvert et fermé ici sans le
-    // JavaScript du DSFR (qui enregistre chaque case à cocher et ralentit les longues listes de filtre)
-    document.querySelectorAll('#config .fr-accordion__btn').forEach(btn => btn.addEventListener('click', () => {
-      const open = btn.getAttribute('aria-expanded') !== 'true';
-      btn.setAttribute('aria-expanded', String(open));
-      $id(btn.getAttribute('aria-controls')).classList.toggle('fr-collapse--expanded', open);
-    }));
     $id('cfg-done').addEventListener('click', () => app.closeConfig());
     $id('cfg-revert').addEventListener('click', () => app.revert());
 
@@ -60,44 +53,49 @@ const TCDConfig = (function () {
     root.querySelectorAll('input[type="radio"]').forEach(r => { r.checked = r.value === value; });
   }
 
-  // Largeur du panneau, réglée en faisant glisser son bord : préférence de l'utilisateur, gardée dans son navigateur
-  const WIDTH_KEY = 'tcd-config-width';
-  const DEFAULT_WIDTH = 340;
-  const panelWidth = () => Number($id('cfg-resizer').getAttribute('aria-valuenow')) || DEFAULT_WIDTH;
+  // Hauteur du panneau, au-dessus du tableau : réglée en faisant glisser son bord inférieur.
+  // Préférence de l'utilisateur, gardée dans son navigateur ; le tableau garde toujours un minimum de place.
+  const HEIGHT_KEY = 'tcd-config-height';
+  const MIN_HEIGHT = 200;
+  const defaultHeight = () => Math.round(window.innerHeight * 0.55);
+  const panelHeight = () => Number($id('cfg-resizer').getAttribute('aria-valuenow')) || defaultHeight();
 
-  function setPanelWidth(width, persist) {
-    const max = Math.round(Math.max(260, Math.min(window.innerWidth * 0.7, window.innerWidth - 320)));
-    const w = Math.round(Math.min(max, Math.max(260, width)));
-    $id('app').style.setProperty('--cfg-width', w + 'px');
-    $id('cfg-resizer').setAttribute('aria-valuenow', w);
+  function setPanelHeight(height, persist) {
+    const max = Math.max(MIN_HEIGHT, window.innerHeight - 180);
+    const h = Math.round(Math.min(max, Math.max(MIN_HEIGHT, height)));
+    $id('app').style.setProperty('--cfg-height', h + 'px');
+    $id('cfg-resizer').setAttribute('aria-valuenow', h);
     $id('cfg-resizer').setAttribute('aria-valuemax', max);
-    if (persist) { try { localStorage.setItem(WIDTH_KEY, String(w)); } catch (e) { /* stockage indisponible */ } }
+    if (persist) { try { localStorage.setItem(HEIGHT_KEY, String(h)); } catch (e) { /* stockage indisponible */ } }
   }
 
   function initResizer() {
     const handle = $id('cfg-resizer');
     let saved = 0;
-    try { saved = Number(localStorage.getItem(WIDTH_KEY)); } catch (e) { /* stockage indisponible */ }
-    setPanelWidth(saved || DEFAULT_WIDTH, false);
+    try { saved = Number(localStorage.getItem(HEIGHT_KEY)); } catch (e) { /* stockage indisponible */ }
+    setPanelHeight(saved || defaultHeight(), false);
     handle.addEventListener('pointerdown', e => {
       e.preventDefault();
       handle.setPointerCapture(e.pointerId);
-      const left = $id('config').getBoundingClientRect().left;
-      const move = ev => setPanelWidth(ev.clientX - left, false);
+      const top = $id('config').getBoundingClientRect().top;
+      const move = ev => setPanelHeight(ev.clientY - top, false);
       document.body.classList.add('is-resizing');
       handle.addEventListener('pointermove', move);
       handle.addEventListener('lostpointercapture', () => {
         handle.removeEventListener('pointermove', move);
         document.body.classList.remove('is-resizing');
-        setPanelWidth(panelWidth(), true);
+        setPanelHeight(panelHeight(), true);
       }, { once: true });
     });
     handle.addEventListener('keydown', e => {
-      const step = { ArrowLeft: -16, ArrowRight: 16 }[e.key];
-      if (step) { e.preventDefault(); setPanelWidth(panelWidth() + step, true); }
+      const step = { ArrowUp: -24, ArrowDown: 24 }[e.key];
+      if (step) { e.preventDefault(); setPanelHeight(panelHeight() + step, true); }
     });
-    handle.addEventListener('dblclick', () => setPanelWidth(DEFAULT_WIDTH, true));
-    window.addEventListener('resize', () => setPanelWidth(panelWidth(), false));
+    handle.addEventListener('dblclick', () => {
+      try { localStorage.removeItem(HEIGHT_KEY); } catch (e) { /* stockage indisponible */ }
+      setPanelHeight(defaultHeight(), false);
+    });
+    window.addEventListener('resize', () => setPanelHeight(panelHeight(), false));
   }
 
   /** Choisit le rendu dans la liste de pivotUI, qui recalcule le tableau */

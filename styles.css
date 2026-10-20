@@ -38,10 +38,10 @@ body { margin: 0; overflow: hidden; background: var(--background-default-grey); 
 #config { grid-area: config; }
 
 body.is-config { background: var(--background-alt-grey); }
+/* Configuration en haut (hauteur réglable), tableau en dessous */
 body.is-config #app {
-  grid-template-columns: var(--cfg-width, 340px) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: "config bar" "config stage";
+  grid-template-rows: var(--cfg-height, 55vh) auto minmax(0, 1fr);
+  grid-template-areas: "config" "bar" "stage";
 }
 
 /* ==========================================================================
@@ -250,20 +250,22 @@ table.pvtTable td.has-bar.bar-neg::after { background-color: var(--background-fl
   flex-direction: column;
   min-height: 0;
   background: var(--background-default-grey);
-  border-right: 1px solid var(--border-default-grey);
+  border-bottom: 1px solid var(--border-default-grey);
 }
-/* Poignée de redimensionnement, sur le bord droit du panneau */
-.cfg-resizer { position: absolute; z-index: 6; top: 0; bottom: 0; right: -6px; width: 12px; cursor: col-resize; touch-action: none; }
-.cfg-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px; transition: background-color .15s; }
+/* Poignée de redimensionnement, sur le bord inférieur du panneau */
+.cfg-resizer { position: absolute; z-index: 6; left: 0; right: 0; bottom: -7px; height: 14px; cursor: row-resize; touch-action: none; }
+.cfg-resizer::before { content: ""; position: absolute; left: 50%; top: 5px; width: 3rem; height: 4px; margin-left: -1.5rem; border-radius: 2px; background-color: var(--border-plain-grey); }
+.cfg-resizer::after { content: ""; position: absolute; left: 0; right: 0; top: 6px; height: 2px; transition: background-color .15s; }
 .cfg-resizer:hover::after, .cfg-resizer:focus-visible::after, body.is-resizing .cfg-resizer::after { background-color: var(--border-action-high-blue-france); }
 .cfg-resizer:focus-visible { outline-offset: -2px; }
-body.is-resizing { cursor: col-resize; user-select: none; }
+body.is-resizing { cursor: row-resize; user-select: none; }
 .cfg-head {
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
   padding: .75rem 1rem;
   border-bottom: 1px solid var(--border-default-grey);
 }
-.cfg-title { display: flex; flex-direction: column; min-width: 0; }
+.cfg-title { display: flex; align-items: baseline; gap: .75rem; min-width: 0; }
+.cfg-title h2 { font-size: 1.125rem; line-height: 1.5rem; }
 .cfg-head .fr-btns-group { flex-wrap: nowrap; margin: 0; }
 .cfg-head .fr-btns-group > li { width: auto; }
 .cfg-head .fr-btns-group .fr-btn { margin: 0 0 0 .5rem; }
@@ -271,17 +273,26 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .save-state.is-saved { color: var(--text-default-success); }
 .save-state.is-error { color: var(--text-default-error); }
 
-.cfg-body { flex: 1; overflow-y: auto; padding: 0 1rem 1.5rem; }
-.cfg-section { padding: 1rem 0; border-bottom: 1px solid var(--border-default-grey); }
+.cfg-head { padding-top: .5rem; padding-bottom: .5rem; }
+/* Trois colonnes qui défilent chacune : champs, disposition, affichage */
+.cfg-body {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.2fr) minmax(16rem, 1fr);
+}
+.cfg-col { min-width: 0; min-height: 0; overflow-y: auto; padding: 0 1rem; }
+.cfg-col + .cfg-col { border-left: 1px solid var(--border-default-grey); }
+.cfg-col--fields { display: flex; flex-direction: column; }
+.cfg-section { padding: .75rem 0; border-bottom: 1px solid var(--border-default-grey); }
+.cfg-section:last-child { border-bottom: 0; }
+.cfg-section--grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.cfg-section--grow #slot-unused { flex: 1; min-height: 4rem; display: flex; }
+.cfg-section--grow td.pvtUnused { flex: 1; max-height: none; }
+.cfg-display > * + * { margin-top: 1rem; }
+.cfg-display .fr-segmented, .cfg-display .fr-select-group, .cfg-display .fr-input-group, .cfg-display .fr-toggle { margin-bottom: 0; }
 .cfg-section-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
 .cfg-heading { margin: 0; font-size: .875rem; line-height: 1.5rem; font-weight: 700; color: var(--text-title-grey); }
 .cfg-section-head .fr-btn { margin: 0; }
 .cfg-section .fr-search-bar { margin-bottom: .5rem; }
-.cfg-accordion { margin: 0; }
-/* Le JS du DSFR n'est pas chargé : sans lui, ses accordéons restent ouverts (amélioration progressive) */
-.cfg-accordion .fr-collapse:not(.fr-collapse--expanded) { display: none; }
-.cfg-accordion .fr-collapse > * + * { margin-top: 1rem; }
-.cfg-accordion .fr-segmented, .cfg-accordion .fr-select-group, .cfg-accordion .fr-toggle { margin-bottom: 0; }
 .order-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
 .order-row .fr-label { margin-bottom: .25rem; }
 
@@ -295,7 +306,7 @@ td.pvtAxisContainer {
 }
 td.pvtAxisContainer:not(:has(> li))::before { content: "Déposez un champ ici"; align-self: center; padding: 0 .375rem; color: var(--text-mention-grey); font-size: .75rem; }
 td.pvtUnused:not(:has(> li))::before { content: "Tous les champs sont utilisés"; }
-td.pvtUnused { max-height: 14rem; overflow-y: auto; border-style: solid; border-color: var(--border-default-grey); background-color: var(--background-default-grey); }
+td.pvtUnused { overflow-y: auto; border-style: solid; border-color: var(--border-default-grey); background-color: var(--background-default-grey); }
 td.pvtRows { flex-direction: column; align-items: flex-start; }
 body.is-dragging td.pvtAxisContainer { border-color: var(--border-action-high-blue-france); }
 td.pvtAxisContainer:has(> .pvtPlaceholder) { background-color: var(--background-alt-blue-france); }
@@ -422,17 +433,21 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
    Petites largeurs (widget étroit dans Grist, panneau latéral ouvert…)
    ========================================================================== */
 
-@media (max-width: 720px) {
-  body.is-config #app {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 58vh) auto minmax(0, 1fr);
-    grid-template-areas: "config" "bar" "stage";
-  }
-  #config { border-right: 0; border-bottom: 1px solid var(--border-default-grey); }
-  .cfg-resizer { display: none; }
+/* Widget moyen : l'affichage passe sous la disposition */
+@media (max-width: 960px) {
+  .cfg-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-content: start; overflow-y: auto; }
+  .cfg-col { min-height: auto; overflow: visible; }
+  .cfg-col--fields { grid-column: 1; grid-row: 1 / span 2; }
+  .cfg-col:nth-child(2) { grid-column: 2; grid-row: 1; }
+  .cfg-col:nth-child(3) { grid-column: 2; grid-row: 2; border-top: 1px solid var(--border-default-grey); }
+}
+/* Widget étroit : une seule colonne qui défile */
+@media (max-width: 640px) {
+  .cfg-body { display: block; }
+  .cfg-col + .cfg-col { border-left: 0; border-top: 1px solid var(--border-default-grey); }
+  .cfg-section--grow td.pvtUnused { max-height: 10rem; }
   body.is-config #viewbar { margin: .5rem .5rem 0; }
   body.is-config #stage { margin: 0 .5rem .5rem; }
-  td.pvtUnused { max-height: 8rem; }
 }
 @media (max-width: 520px) {
   .summary .sum-sep, .summary .sum-x, .summary .sum-dim { display: none; }
