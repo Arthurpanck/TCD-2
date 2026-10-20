@@ -17,7 +17,9 @@ async function open(options, { width = 1280, height = 760, data, meta } = {}) {
   page.setDefaultTimeout(5000);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') { errors.push(m.text()); } });
+  // Les aléas réseau des CDN (icônes du DSFR sur jsdelivr) ne sont pas des erreurs du widget
+  const cdnNoise = t => /cdn\.jsdelivr\.net|^Failed to load resource: net::ERR_FAILED$/.test(t);
+  page.on('console', m => { if (m.type() === 'error' && !cdnNoise(m.text())) { errors.push(m.text()); } });
   await page.addInitScript(([o, d, m]) => {
     window.__MOCK_OPTIONS__ = o;
     if (d) { window.__MOCK_DATA__ = d; }
@@ -183,6 +185,12 @@ await test('sélection conservée quand les données ou la mise en forme changen
   await page.evaluate(() => TCDConfig.setRenderer('Carte de chaleur'));
   await page.waitForTimeout(200);
   assert(await page.locator('td.is-selected').count() === 1, 'case sélectionnée perdue après changement de rendu');
+  const strong = page.locator('td.pvtVal.is-heat-strong').first();
+  await strong.click();
+  const [fg, bg] = await strong.evaluate(td => [getComputedStyle(td).color, getComputedStyle(td).backgroundColor]);
+  assert(fg !== bg && fg !== 'rgb(255, 255, 255)', `case foncée sélectionnée illisible : ${fg} sur ${bg}`);
+  await strong.click();
+  await page.locator(LEAF).first().click();
   await page.evaluate(() => window.__mockGrist.emitRecords(window.__mockGrist.data.slice(0, 100)));
   await page.waitForTimeout(250);
   const ids = await page.evaluate(() => window.__mockGrist.selected);
