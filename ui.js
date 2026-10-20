@@ -21,19 +21,20 @@ const UI = (function () {
     return node;
   }
 
+  /** Place un élément flottant sous `r` (au-dessus faute de place), sans sortir de la fenêtre */
+  function placeNear(node, r, alignEnd = false) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const w = node.offsetWidth, h = node.offsetHeight;
+    let top = r.bottom + 6;
+    if (top + h > vh - 8 && r.top - h - 6 >= 8) { top = r.top - h - 6; }
+    node.style.left = Math.max(8, Math.min(alignEnd ? r.right - w : r.left, vw - w - 8)) + 'px';
+    node.style.top = Math.max(8, Math.min(top, vh - h - 8)) + 'px';
+  }
+
   function position() {
     if (!anchor || pop.hidden) { return; }
-    const r = anchor.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
-    pop.style.maxHeight = (vh - 16) + 'px';
-    const pw = pop.offsetWidth, ph = pop.offsetHeight;
-    let left = align === 'end' ? r.right - pw : r.left;
-    left = Math.max(8, Math.min(left, vw - pw - 8));
-    let top = r.bottom + 6;
-    if (top + ph > vh - 8 && r.top - ph - 6 >= 8) { top = r.top - ph - 6; }
-    top = Math.max(8, Math.min(top, vh - ph - 8));
-    pop.style.left = left + 'px';
-    pop.style.top = top + 'px';
+    pop.style.maxHeight = (window.innerHeight - 16) + 'px';
+    placeNear(pop, anchor.getBoundingClientRect(), align === 'end');
   }
 
   function isOpenFor(el) { return !pop.hidden && anchor === el; }
@@ -62,18 +63,18 @@ const UI = (function () {
     if (cb) { cb(); }
   }
 
-  /** Menu d'actions : items = [{ icon, label, onClick, danger }] ou 'sep' */
+  /** Menu d'actions : items = [{ icon (classe fr-icon-*), label, onClick, danger }] ou 'sep' */
   function menu(items, title) {
     const root = el('div', { class: 'menu', role: 'menu' });
     if (title) { root.append(el('div', { class: 'menu-title' }, title)); }
     for (const item of items) {
       if (item === 'sep') { root.append(el('div', { class: 'menu-sep' })); continue; }
+      // Bouton tertiaire du DSFR, icône à gauche (fr-icon-*)
       root.append(el('button', {
-        type: 'button', role: 'menuitem', class: 'menu-item' + (item.danger ? ' is-danger' : ''),
+        type: 'button', role: 'menuitem',
+        class: `menu-item fr-btn fr-btn--tertiary-no-outline fr-btn--sm${item.icon ? ' fr-btn--icon-left ' + item.icon : ''}${item.danger ? ' is-danger' : ''}`,
         onclick: () => { closePopover(); item.onClick(); },
-        html: (item.icon ? Icons.get(item.icon, 15) : '') + `<span></span>`,
-      }));
-      root.lastChild.querySelector('span').textContent = item.label;
+      }, item.label));
     }
     return root;
   }
@@ -92,16 +93,13 @@ const UI = (function () {
       })));
   }
 
+  /** Notification : petite alerte du DSFR (fr-alert--info, --success, --error), en bas de l'écran */
   function toast(message, kind = 'info') {
-    toastEl.textContent = message;
-    toastEl.className = 'toast is-' + kind;
+    toastEl.className = `toast fr-alert fr-alert--sm fr-alert--${kind}`;
+    toastEl.replaceChildren(el('p', {}, message));
     toastEl.hidden = false;
-    requestAnimationFrame(() => toastEl.classList.add('is-visible'));
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toastEl.classList.remove('is-visible');
-      setTimeout(() => { toastEl.hidden = true; }, 200);
-    }, 2600);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2600);
   }
 
   document.addEventListener('mousedown', e => {
@@ -110,5 +108,5 @@ const UI = (function () {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePopover(); } });
   window.addEventListener('resize', () => position());
 
-  return { el, openPopover, closePopover, isOpenFor, menu, segmented, toast };
+  return { el, placeNear, openPopover, closePopover, isOpenFor, menu, segmented, toast };
 })();

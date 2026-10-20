@@ -68,4 +68,4 @@ Organisation du code :
 | `gristColumns.js` | Formats et libellés des colonnes Grist (logique de formatage de Grist) |
 | `data.js` | Préparation des données Grist (types, valeurs, dérivés de dates, tris) |
 | `aggregators.js` | Catalogue des calculs transmis à pivotUI |
-| `ui.js`, `icons.js` | Popovers, menus, notifications, contrôles segmentés et icônes du DSFR |
+| `ui.js` | Popovers, menus, notifications et contrôles segmentés (composants du DSFR) |

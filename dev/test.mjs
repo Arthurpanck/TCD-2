@@ -315,7 +315,7 @@ await test('lecture seule : format par défaut de Grist et indication pour l’a
   await page.evaluate(() => grist.__openConfig());
   assert((await page.locator('#format-hint').textContent()).includes('accès complet'), 'indication accès complet absente');
   assert(await page.locator('#decimals, #scale, #suffix, #accent-swatches').count() === 0, 'les anciens réglages de format/couleur doivent avoir disparu');
-  assert(await page.locator('#renderer-seg button[data-value="chart"]').count() === 0, 'le mode graphique doit avoir disparu');
+  assert(await page.locator('#renderer-seg input[value="chart"]').count() === 0, 'le mode graphique doit avoir disparu');
   await page.close();
 });
 

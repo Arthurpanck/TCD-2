@@ -12,6 +12,9 @@ const TCDRender = (function () {
     'Carte de chaleur par ligne': ['heat', 'row'],
     'Carte de chaleur par colonne': ['heat', 'col'],
   };
+  /** Choix proposés à l'utilisateur (panneau de configuration et menu « Affichage ») */
+  const STYLES = [['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']];
+  const DENSITIES = [['compact', 'Compacte'], ['standard', 'Standard'], ['comfortable', 'Aérée']];
   const LEGACY = { 'Table Barchart': 'Table avec barres', 'Heatmap': 'Carte de chaleur', 'Row Heatmap': 'Carte de chaleur par ligne', 'Col Heatmap': 'Carte de chaleur par colonne' };
 
   /** Nom de rendu valide (les noms inconnus ou obsolètes donnent « Table ») */
@@ -38,7 +41,7 @@ const TCDRender = (function () {
 
   /** Échelle de couleur de la carte de chaleur (option `heatmap.colorScaleGenerator` de pivottable) */
   function colorScaleGenerator(values) {
-    const surface = themeRgb('--surface'), accent = themeRgb('--accent-base');
+    const surface = themeRgb('--background-default-grey'), accent = themeRgb('--background-action-high-blue-france');
     // Boucle plutôt que Math.min(...values) : un grand tableau dépasserait la pile d'appels
     let min = Infinity, max = -Infinity;
     for (const v of values) { if (v < min) { min = v; } if (v > max) { max = v; } }
@@ -184,5 +187,5 @@ const TCDRender = (function () {
     });
   }
 
-  return { normalizeName, kindOf, nameOf, themeRgb, renderers, decorate, stick, headerText };
+  return { STYLES, DENSITIES, normalizeName, kindOf, nameOf, themeRgb, renderers, decorate, stick, headerText };
 })();

@@ -82,23 +82,7 @@
               <button type="button" class="fr-accordion__btn" aria-expanded="true" aria-controls="cfg-display">Affichage</button>
             </h3>
             <div class="fr-collapse fr-collapse--expanded" id="cfg-display">
-              <fieldset class="fr-segmented fr-segmented--sm" id="renderer-seg">
-                <legend class="fr-segmented__legend">Mise en forme</legend>
-                <div class="fr-segmented__elements">
-                  <div class="fr-segmented__element">
-                    <input value="table" type="radio" id="renderer-table" name="renderer">
-                    <label class="fr-label" for="renderer-table">Tableau</label>
-                  </div>
-                  <div class="fr-segmented__element">
-                    <input value="heat" type="radio" id="renderer-heat" name="renderer">
-                    <label class="fr-label" for="renderer-heat">Chaleur</label>
-                  </div>
-                  <div class="fr-segmented__element">
-                    <input value="bars" type="radio" id="renderer-bars" name="renderer">
-                    <label class="fr-label" for="renderer-bars">Barres</label>
-                  </div>
-                </div>
-              </fieldset>
+              <div id="renderer-seg"></div>
 
               <div class="fr-select-group" id="heat-scope-field">
                 <label class="fr-label" for="heat-scope">Échelle de couleur</label>
@@ -134,23 +118,7 @@
                 <p class="fr-hint-text" id="subtotals-hint">Cliquez sur un groupe pour le replier.</p>
               </div>
 
-              <fieldset class="fr-segmented fr-segmented--sm" id="density-seg">
-                <legend class="fr-segmented__legend">Densité</legend>
-                <div class="fr-segmented__elements">
-                  <div class="fr-segmented__element">
-                    <input value="compact" type="radio" id="density-compact" name="density">
-                    <label class="fr-label" for="density-compact">Compacte</label>
-                  </div>
-                  <div class="fr-segmented__element">
-                    <input value="standard" type="radio" id="density-standard" name="density">
-                    <label class="fr-label" for="density-standard">Standard</label>
-                  </div>
-                  <div class="fr-segmented__element">
-                    <input value="comfortable" type="radio" id="density-comfortable" name="density">
-                    <label class="fr-label" for="density-comfortable">Aérée</label>
-                  </div>
-                </div>
-              </fieldset>
+              <div id="density-seg"></div>
 
               <p class="fr-hint-text fr-mb-0">Cliquer sur une case filtre les widgets Grist liés à ce tableau (« Sélectionner par »). Cliquez de nouveau sur la case, ou appuyez sur Échap, pour tout réafficher.</p>
             </div>
@@ -180,11 +148,10 @@
 
       <div id="filter-layer"></div>
       <div id="popover" class="popover" hidden></div>
-      <div id="tooltip" class="tooltip" hidden></div>
+      <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     </div>
 
-    <script src="icons.js"></script>
     <script src="ui.js"></script>
     <script src="gristColumns.js"></script>
     <script src="data.js"></script>

@@ -30,7 +30,6 @@ const OBSOLETE = ['chartType', 'decimals', 'scale', 'suffix', 'accent', 'clickDe
 const ROW_LIMIT = 1500;
 const MENU_LIMIT = 1000;
 const ORDERS = ['key_a_to_z', 'value_a_to_z', 'value_z_to_a'];
-const DENSITIES = ['compact', 'standard', 'comfortable'];
 
 const state = {
   settings: normalizeSettings(null),
@@ -83,7 +82,7 @@ function normalizeSettings(raw, legacy = {}) {
   if ((!raw || raw.density === undefined) && legacy.columnSize) {
     s.density = parseFloat(legacy.columnSize) < 0.75 ? 'compact' : 'standard';
   }
-  if (!DENSITIES.includes(s.density)) { s.density = DEFAULTS.density; }
+  if (!TCDRender.DENSITIES.some(([d]) => d === s.density)) { s.density = DEFAULTS.density; }
   s.fontScale = Math.min(1.4, Math.max(0.8, Number(s.fontScale) || 1));
   return s;
 }
@@ -253,25 +252,25 @@ function showResult() {
 
   if (!state.dataset.records.length) {
     renderSummary(s);
-    return showMessage('table', 'La table source est vide', "Ajoutez des lignes dans la table liée à ce widget : le tableau croisé se mettra à jour automatiquement.");
+    return showMessage('fr-icon-table-line', 'La table source est vide', "Ajoutez des lignes dans la table liée à ce widget : le tableau croisé se mettra à jour automatiquement.");
   }
   if (!pvt || !isConfigured(s)) {
     renderSummary(s);
     if (state.configOpen) {
-      return showMessage('grid', 'Construisez votre tableau', 'Glissez un champ dans « Lignes » ou « Colonnes », ou cliquez sur un champ pour choisir où le placer.');
+      return showMessage('fr-icon-layout-grid-line', 'Construisez votre tableau', 'Glissez un champ dans « Lignes » ou « Colonnes », ou cliquez sur un champ pour choisir où le placer.');
     }
-    return showMessage('grid', "Ce tableau croisé n'est pas encore configuré",
+    return showMessage('fr-icon-layout-grid-line', "Ce tableau croisé n'est pas encore configuré",
       'Pour le construire, cliquez sur « Ouvrir la configuration » dans le panneau de droite de Grist (onglet du widget).');
   }
   if (out.querySelector('.pvtRendererArea > .tcd-no-data')) {
     renderSummary(s);
-    return showMessage('filter', 'Aucune ligne ne correspond aux filtres',
+    return showMessage('fr-icon-filter-line', 'Aucune ligne ne correspond aux filtres',
       'Modifiez ou supprimez les filtres (bouton « filtres » de la barre ci-dessus, ou dans la configuration).');
   }
   const table = out.querySelector('.pvtRendererArea > table.pvtTable');
   if (!table) {
     renderSummary(s);
-    return showMessage('info', 'Impossible de calculer ce tableau', $(out).find('.pvtRendererArea').text());
+    return showMessage('fr-icon-information-line', 'Impossible de calculer ce tableau', $(out).find('.pvtRendererArea').text());
   }
   out.classList.remove('is-message');
   out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
@@ -290,7 +289,7 @@ function showMessage(icon, title, text) {
   out.classList.add('is-message');
   out.querySelectorAll(':scope > .empty').forEach(n => n.remove());
   out.append(el('div', { class: 'empty' },
-    el('div', { class: `fr-callout ${Icons.cls(icon)}` },
+    el('div', { class: `fr-callout ${icon}` },
       el('h3', { class: 'fr-callout__title fr-h6' }, title),
       text ? el('p', { class: 'fr-callout__text fr-text--md' }, text) : null)));
 }
@@ -433,7 +432,8 @@ function setHoverCol(key) {
   if (key !== null) { (colCells.get(key) || []).forEach(td => td.classList.add('is-col-hover')); }
 }
 
-function showTooltip(td, x, y) {
+/** Info-bulle du DSFR (fr-tooltip), au-dessus de la case ou en dessous faute de place, flèche sur la case */
+function showTooltip(td) {
   const info = cellInfo(td);
   if (!info) { return; }
   const lines = Object.entries(info.filters).map(([a, v]) => el('div', { class: 'tt-line' }, el('span', {}, a), el('b', {}, String(v))));
@@ -441,13 +441,18 @@ function showTooltip(td, x, y) {
     ...(lines.length ? lines : [el('div', { class: 'tt-line' }, el('span', {}, 'Ensemble des données'))]),
     el('div', { class: 'tt-value' }, el('span', {}, state.aggLabel), el('b', {}, td.textContent)),
     el('div', { class: 'tt-hint' }, td.classList.contains('is-selected') ? 'Cliquez pour tout réafficher dans les vues liées' : 'Cliquez pour filtrer les vues liées'));
+  const r = td.getBoundingClientRect();
+  tooltip.className = 'tooltip fr-tooltip fr-placement fr-placement--top fr-tooltip--shown';
   tooltip.hidden = false;
   const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
-  let left = x + 14, top = y + 16;
-  if (left + tw > window.innerWidth - 8) { left = x - tw - 14; }
-  if (top + th > window.innerHeight - 8) { top = y - th - 12; }
-  tooltip.style.left = Math.max(8, left) + 'px';
-  tooltip.style.top = Math.max(8, top) + 'px';
+  const below = r.top - th < 8;
+  tooltip.classList.toggle('fr-placement--top', !below);
+  tooltip.classList.toggle('fr-placement--bottom', below);
+  const center = r.left + r.width / 2;
+  const left = Math.max(8, Math.min(center - tw / 2, window.innerWidth - tw - 8));
+  tooltip.style.setProperty('--arrow-x', (center - left - tw / 2) + 'px');
+  tooltip.style.left = left + 'px';
+  tooltip.style.top = (below ? r.bottom : r.top - th) + 'px';
 }
 
 function hideTooltip() {
@@ -465,7 +470,7 @@ function setupTableInteractions() {
     const td = e.target.closest(VALUE_CELLS);
     hideTooltip();
     if (!td || document.body.classList.contains('is-dragging')) { return; }
-    tooltipTimer = setTimeout(() => showTooltip(td, e.clientX, e.clientY), 350);
+    tooltipTimer = setTimeout(() => showTooltip(td), 350);
   });
   out.addEventListener('mouseleave', () => { setHoverCol(null); hideTooltip(); });
   out.addEventListener('keydown', onTableKey);
@@ -683,13 +688,13 @@ function openDisplayMenu(anchor) {
   const reopen = () => { UI.closePopover(); openDisplayMenu(anchor); };
   const groups = s.subtotals && s.rows.length > 1;
   const root = el('div', { class: 'menu display-menu' },
-    UI.segmented('Mise en forme', [['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']], r.kind,
+    UI.segmented('Mise en forme', TCDRender.STYLES, r.kind,
       v => { TCDConfig.setRenderer(TCDRender.nameOf(v, r.scope)); reopen(); }),
     groups ? el('div', { class: 'menu-title' }, 'Groupes') : null,
     groups ? el('ul', { class: 'fr-btns-group fr-btns-group--inline fr-btns-group--sm' },
       el('li', {}, el('button', { type: 'button', class: 'fr-btn fr-btn--secondary', onclick: () => { setAllCollapsed(true); UI.closePopover(); } }, 'Tout replier')),
       el('li', {}, el('button', { type: 'button', class: 'fr-btn fr-btn--secondary', onclick: () => { setAllCollapsed(false); UI.closePopover(); } }, 'Tout déplier'))) : null,
-    UI.segmented('Densité', [['compact', 'Compacte'], ['standard', 'Standard'], ['comfortable', 'Aérée']], s.density,
+    UI.segmented('Densité', TCDRender.DENSITIES, s.density,
       v => { update({ density: v }); reopen(); }),
     el('div', { class: 'menu-title' }, 'Taille du texte'),
     el('div', { class: 'stepper' },
@@ -715,7 +720,7 @@ function exportContext() {
     numFmt: f.kind === 'percent' ? '0.0%' : f.kind === 'number' ? TCDGrist.excelFormat(f.colId) : null,
     collapsed: state.collapsed.rows,
     renderer: TCDRender.kindOf(state.settings.rendererName),
-    accent: TCDRender.themeRgb('--accent-base'),
+    accent: TCDRender.themeRgb('--background-action-high-blue-france'),
   };
 }
 
@@ -733,10 +738,10 @@ function openExportMenu(anchor) {
   if (UI.isOpenFor(anchor)) { return UI.closePopover(); }
   if (!state.pd) { return UI.toast("Rien à exporter : configurez d'abord le tableau.", 'info'); }
   UI.openPopover(anchor, UI.menu([
-    { icon: 'excel', label: 'Excel mis en forme (.xlsx)', onClick: exportXlsx },
-    { icon: 'download', label: 'CSV, données brutes', onClick: () => TCDExport.csv(exportContext()) },
-    { icon: 'copy', label: 'Copier (données brutes)', onClick: () => TCDExport.copy(exportContext()).then(() => UI.toast('Tableau copié : collez-le dans un tableur ou un courriel.', 'success')) },
-    { icon: 'printer', label: 'Imprimer', onClick: () => window.print() },
+    { icon: 'fr-icon-file-download-line', label: 'Excel mis en forme (.xlsx)', onClick: exportXlsx },
+    { icon: 'fr-icon-download-line', label: 'CSV, données brutes', onClick: () => TCDExport.csv(exportContext()) },
+    { icon: 'fr-icon-clipboard-line', label: 'Copier (données brutes)', onClick: () => TCDExport.copy(exportContext()).then(() => UI.toast('Tableau copié : collez-le dans un tableur ou un courriel.', 'success')) },
+    { icon: 'fr-icon-printer-line', label: 'Imprimer', onClick: () => window.print() },
   ], 'Exporter le tableau'), { align: 'end' });
 }
 
@@ -831,7 +836,7 @@ function start() {
     if (e.key === 'Escape' && $id('popover').hidden) { clearSelection(); }
   });
 
-  showMessage('table', 'Chargement des données…', '');
+  showMessage('fr-icon-table-line', 'Chargement des données…', '');
   $id('output').classList.add('is-loading');
 
   TCDConfig.init(app);

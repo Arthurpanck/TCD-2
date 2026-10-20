@@ -10,26 +10,6 @@
 
 :root {
   --font-scale: 1;
-  /* Couleurs du widget, prises dans les variables du DSFR */
-  --bg: var(--background-alt-grey);
-  --surface: var(--background-default-grey);
-  --surface-2: var(--background-alt-grey);
-  --surface-3: var(--background-contrast-grey);
-  --border: var(--border-default-grey);
-  --border-strong: var(--border-plain-grey);
-  --text: var(--text-default-grey);
-  --text-muted: var(--text-mention-grey);
-  --text-subtle: var(--text-mention-grey);
-  --accent-base: var(--background-action-high-blue-france);
-  --accent: var(--text-action-high-blue-france);
-  --accent-soft: var(--background-action-low-blue-france);
-  --accent-softer: var(--background-alt-blue-france);
-  --row-hover: var(--background-alt-blue-france);
-  --heat-text-strong: var(--text-inverted-grey);
-  --danger: var(--text-default-error);
-  --success: var(--text-default-success);
-  --shadow-lg: 0 6px 18px rgba(0, 0, 18, .16);
-
   --fs-base: .875rem;
   --cell-py: .375rem;
   --cell-px: .75rem;
@@ -44,7 +24,7 @@
 
 [hidden] { display: none !important; }
 html, body { height: 100%; }
-body { margin: 0; overflow: hidden; background: var(--surface); }
+body { margin: 0; overflow: hidden; background: var(--background-default-grey); }
 
 #app {
   height: 100vh;
@@ -57,7 +37,7 @@ body { margin: 0; overflow: hidden; background: var(--surface); }
 #stage { grid-area: stage; }
 #config { grid-area: config; }
 
-body.is-config { background: var(--bg); }
+body.is-config { background: var(--background-alt-grey); }
 body.is-config #app {
   grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
@@ -74,10 +54,10 @@ body.is-config #app {
   gap: .5rem;
   min-height: 2.75rem;
   padding: .25rem .5rem .25rem 1rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  border-bottom: 1px solid var(--border-default-grey);
+  background: var(--background-default-grey);
 }
-body.is-config #viewbar { margin: .75rem .75rem 0; border: 1px solid var(--border); border-bottom: 0; }
+body.is-config #viewbar { margin: .75rem .75rem 0; border: 1px solid var(--border-default-grey); border-bottom: 0; }
 
 .summary {
   flex: 1;
@@ -88,11 +68,11 @@ body.is-config #viewbar { margin: .75rem .75rem 0; border: 1px solid var(--borde
   white-space: nowrap;
   overflow: hidden;
   font-size: .875rem;
-  color: var(--text-muted);
+  color: var(--text-mention-grey);
 }
 .summary > * { flex-shrink: 0; }
 .summary .sum-agg { font-weight: 700; color: var(--text-title-grey); flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
-.summary .sum-dim { color: var(--text); flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
+.summary .sum-dim { color: var(--text-default-grey); flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
 .summary .sum-meta { margin-left: .25rem; }
 .summary .fr-tag { margin: 0; }
 .summary .sum-selection { flex-shrink: 1; min-width: 0; max-width: 100%; justify-content: flex-start; }
@@ -105,15 +85,15 @@ body.is-config #viewbar { margin: .75rem .75rem 0; border: 1px solid var(--borde
    Zone d'affichage : le tableau du DSFR (fr-table) devient la zone de défilement
    ========================================================================== */
 
-#stage { position: relative; min-height: 0; background: var(--surface); }
-body.is-config #stage { margin: 0 .75rem .75rem; border: 1px solid var(--border); overflow: hidden; }
+#stage { position: relative; min-height: 0; background: var(--background-default-grey); }
+body.is-config #stage { margin: 0 .75rem .75rem; border: 1px solid var(--border-default-grey); overflow: hidden; }
 
 .output.fr-table { position: absolute; inset: 0; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .output .fr-table__wrapper { flex: 1; min-height: 0; display: flex; }
 .output .fr-table__wrapper::after { display: none; }
 .output .fr-table__container { flex: 1; min-width: 0; overflow: auto; overscroll-behavior: contain; padding: 0; }
-.output:focus { outline: none; }
-.output:focus-visible { outline: 2px solid #0a76f6; outline-offset: -2px; }
+/* Contour de focus du DSFR, ramené à l'intérieur de la zone qui défile */
+.output:focus-visible { outline-offset: -2px; }
 .output.is-message { display: grid; place-items: center; padding: 1.5rem; }
 .output.is-message > .fr-table__wrapper { display: none; }
 .output.is-loading .empty { opacity: .6; }
@@ -150,7 +130,7 @@ table.pvtTable thead th.pvtAxisLabel { z-index: 4; color: var(--text-mention-gre
 table.pvtTable thead th.pvtColLabel { text-align: right; }
 table.pvtTable thead th.pvtColLabel.colexpanded, table.pvtTable thead th.pvtColLabel.colcollapsed { text-align: center; }
 /* Coin supérieur gauche : le calcul affiché */
-table.pvtTable thead th.pvtCorner { left: 0; z-index: 5; vertical-align: bottom; color: var(--accent); text-transform: none; letter-spacing: 0; }
+table.pvtTable thead th.pvtCorner { left: 0; z-index: 5; vertical-align: bottom; color: var(--text-action-high-blue-france); text-transform: none; letter-spacing: 0; }
 /* En-têtes repliables de subtotal.js (▾ / ▸) */
 table.pvtTable th.colexpanded, table.pvtTable th.colcollapsed,
 table.pvtTable th.rowexpanded, table.pvtTable th.rowcollapsed,
@@ -159,7 +139,7 @@ table.pvtTable.no-subtotals th { cursor: default !important; }
 table.pvtTable.no-subtotals th:hover { color: inherit !important; }
 table.pvtTable thead th.pvtAxisLabel.expanded:hover, table.pvtTable thead th.pvtAxisLabel.collapsed:hover,
 table.pvtTable th.rowexpanded:hover, table.pvtTable th.rowcollapsed:hover,
-table.pvtTable th.colexpanded:hover, table.pvtTable th.colcollapsed:hover { color: var(--accent); }
+table.pvtTable th.colexpanded:hover, table.pvtTable th.colcollapsed:hover { color: var(--text-action-high-blue-france); }
 
 /* Libellés de lignes (rowcolN : niveau N), figés à gauche */
 table.pvtTable tbody th.pvtRowLabel {
@@ -185,7 +165,7 @@ table.pvtTable td.pvtVal, table.pvtTable td.pvtTotal, table.pvtTable td.pvtGrand
   cursor: pointer;
 }
 table.pvtTable tbody tr:hover > td.pvtVal,
-table.pvtTable td.pvtVal.is-col-hover { background-color: var(--row-hover); }
+table.pvtTable td.pvtVal.is-col-hover { background-color: var(--background-alt-blue-france); }
 table.pvtTable td.pvtVal:hover, table.pvtTable td.pvtTotal:hover, table.pvtTable td.pvtGrandTotal:hover,
 table.pvtTable td:focus-visible {
   box-shadow: inset 0 0 0 2px var(--border-action-high-blue-france);
@@ -209,7 +189,7 @@ table.pvtTable tr:has(> th.rowcol0.rowexpanded) > .pvtRowLabelFiller,
 table.pvtTable tr:has(> th.rowcol0.rowcollapsed) > .pvtRowLabelFiller,
 table.pvtTable tr:has(> th.rowcol0.rowexpanded) > td.pvtRowSubtotal,
 table.pvtTable tr:has(> th.rowcol0.rowcollapsed) > td.pvtRowSubtotal { background-color: var(--background-contrast-grey); }
-table.pvtTable tbody tr:hover > td.pvtRowSubtotal { background-color: var(--row-hover); }
+table.pvtTable tbody tr:hover > td.pvtRowSubtotal { background-color: var(--background-alt-blue-france); }
 
 /* Lignes au-delà de la limite d'affichage */
 table.pvtTable tbody tr.tcd-over { display: none !important; }
@@ -218,7 +198,7 @@ table.pvtTable tr.tcd-more .show-more { position: sticky; left: var(--cell-px); 
 
 /* Totaux, figés à droite et en bas */
 table.pvtTable .pvtTotal, table.pvtTable .pvtGrandTotal { background-color: var(--background-alt-grey); font-weight: 700; }
-table.pvtTable th.pvtValueHeader { text-align: right; color: var(--accent); text-transform: none; letter-spacing: 0; font-size: var(--fs); }
+table.pvtTable th.pvtValueHeader { text-align: right; color: var(--text-action-high-blue-france); text-transform: none; letter-spacing: 0; font-size: var(--fs); }
 table.pvtTable td.rowTotal, table.pvtTable th.pvtTotalLabel.rowTotal { position: sticky; right: 0; z-index: 1; text-align: right; box-shadow: inset 2px 0 0 var(--border-plain-grey); }
 table.pvtTable thead th.pvtTotalLabel.rowTotal { z-index: 3; }
 table.pvtTable tbody tr:has(> th.pvtTotalLabel.colTotal) > * {
@@ -233,7 +213,7 @@ table.pvtTable.hide-col-totals tr:has(> th.pvtTotalLabel.colTotal) { display: no
 
 /* Carte de chaleur (heatmap de pivottable, du blanc au bleu France) */
 table.pvtTable.is-large { animation: none; }
-table.pvtTable td.is-heat-strong { color: var(--heat-text-strong); font-weight: 700; }
+table.pvtTable td.is-heat-strong { color: var(--text-inverted-grey); font-weight: 700; }
 table.pvtTable tbody tr:hover > td.is-heat, table.pvtTable td.is-heat.is-col-hover { filter: brightness(.95); }
 table.pvtTable td.pvtTotal.is-heat, table.pvtTable td.pvtGrandTotal.is-heat { background-color: var(--background-alt-grey) !important; color: inherit; }
 
@@ -261,24 +241,24 @@ table.pvtTable td.has-bar.bar-neg::after { background-color: var(--background-fl
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background: var(--background-default-grey);
+  border-right: 1px solid var(--border-default-grey);
 }
 .cfg-head {
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
   padding: .75rem 1rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default-grey);
 }
 .cfg-title { display: flex; flex-direction: column; min-width: 0; }
 .cfg-head .fr-btns-group { flex-wrap: nowrap; margin: 0; }
 .cfg-head .fr-btns-group > li { width: auto; }
 .cfg-head .fr-btns-group .fr-btn { margin: 0 0 0 .5rem; }
 .save-state { font-size: .75rem; color: var(--text-mention-grey); }
-.save-state.is-saved { color: var(--success); }
-.save-state.is-error { color: var(--danger); }
+.save-state.is-saved { color: var(--text-default-success); }
+.save-state.is-error { color: var(--text-default-error); }
 
 .cfg-body { flex: 1; overflow-y: auto; padding: 0 1rem 1.5rem; }
-.cfg-section { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+.cfg-section { padding: 1rem 0; border-bottom: 1px solid var(--border-default-grey); }
 .cfg-section-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
 .cfg-heading { margin: 0; font-size: .875rem; line-height: 1.5rem; font-weight: 700; color: var(--text-title-grey); }
 .cfg-section-head .fr-btn { margin: 0; }
@@ -301,29 +281,20 @@ td.pvtAxisContainer {
 }
 td.pvtAxisContainer:not(:has(> li))::before { content: "Déposez un champ ici"; align-self: center; padding: 0 .375rem; color: var(--text-mention-grey); font-size: .75rem; }
 td.pvtUnused:not(:has(> li))::before { content: "Tous les champs sont utilisés"; }
-td.pvtUnused { max-height: 14rem; overflow-y: auto; border-style: solid; border-color: var(--border); background-color: var(--surface); }
+td.pvtUnused { max-height: 14rem; overflow-y: auto; border-style: solid; border-color: var(--border-default-grey); background-color: var(--background-default-grey); }
 td.pvtRows { flex-direction: column; align-items: flex-start; }
 body.is-dragging td.pvtAxisContainer { border-color: var(--border-action-high-blue-france); }
 td.pvtAxisContainer:has(> .pvtPlaceholder) { background-color: var(--background-alt-blue-france); }
 
 /* Champs : tags du DSFR, déplaçables (jQuery UI sortable de pivotUI) */
 li.chip.fr-tag { margin: 0; max-width: 100%; gap: .375rem; cursor: grab; user-select: none; list-style: none; padding-right: .25rem; }
-li.chip.fr-tag:focus-visible { outline: 2px solid #0a76f6; outline-offset: 2px; }
 td.pvtRows > li.chip, td.pvtCols > li.chip {
   background-color: var(--background-action-high-blue-france);
   color: var(--text-inverted-blue-france);
 }
 li.chip.is-derived { font-style: italic; }
 li.chip span.pvtAttr { display: inline-flex; align-items: center; gap: .25rem; min-width: 0; overflow: hidden; white-space: nowrap; }
-.ft {
-  display: inline-grid; place-items: center; flex: none;
-  min-width: 1.25rem; height: 1.125rem; padding: 0 .1875rem;
-  border-radius: .25rem;
-  font-size: .625rem; font-weight: 700; line-height: 1; font-style: normal;
-}
-.ft-number { background-color: var(--background-contrast-green-emeraude); color: var(--text-label-green-emeraude); }
-.ft-text { background-color: var(--background-contrast-purple-glycine); color: var(--text-label-purple-glycine); }
-.ft-date { background-color: var(--background-contrast-orange-terre-battue); color: var(--text-label-orange-terre-battue); }
+.ft { flex: none; font-style: normal; }
 .chip-btn, li.chip .pvtTriangle {
   display: inline-flex; align-items: center; justify-content: center; gap: .125rem; flex: none;
   min-width: 1.375rem; height: 1.375rem; padding: 0 .125rem;
@@ -337,7 +308,7 @@ li.chip.pvtFilteredAttribute .pvtTriangle { background-color: var(--background-f
 li.chip .pvtTriangle[data-count]:not([data-count=""])::after { content: attr(data-count); padding-right: .125rem; }
 td.pvtUnused .chip-remove { display: none; }
 .pvtPlaceholder { height: 1.75rem; min-width: 4rem; border: 1px dashed var(--border-action-high-blue-france); list-style: none; visibility: visible !important; }
-.ui-sortable-helper { box-shadow: var(--shadow-lg) !important; cursor: grabbing; }
+.ui-sortable-helper { box-shadow: var(--lifted-shadow) !important; cursor: grabbing; }
 
 /* Calcul (cellule pvtVals de pivotUI) : listes du DSFR */
 td.pvtVals { display: flex; flex-direction: column; gap: .25rem; padding: 0; }
@@ -361,27 +332,19 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
   position: fixed; z-index: 50;
   min-width: 13rem; max-width: min(22rem, calc(100vw - 16px));
   padding: .5rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-default-grey);
+  background: var(--background-default-grey);
+  box-shadow: var(--lifted-shadow);
   overflow: auto;
   animation: pop-in .12s ease;
 }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .menu { display: flex; flex-direction: column; gap: 1px; }
 .menu-title { padding: .5rem .5rem .25rem; font-size: .75rem; font-weight: 700; color: var(--text-mention-grey); }
-.menu-sep { height: 1px; margin: .25rem 0; background: var(--border); }
-.menu-item {
-  display: flex; align-items: center; gap: .625rem;
-  min-height: 2.5rem; padding: .5rem;
-  border: 0; background-color: transparent; color: var(--text);
-  font: inherit; font-size: .875rem; text-align: left;
-  cursor: pointer;
-}
-.menu-item .icon { color: var(--accent); }
-.menu-item:hover, .menu-item:focus-visible { background-color: var(--background-default-grey-hover); }
-.menu-item:focus-visible { outline: 2px solid #0a76f6; outline-offset: -2px; }
-.menu-item.is-danger, .menu-item.is-danger .icon { color: var(--danger); }
+.menu-sep { height: 1px; margin: .25rem 0; background: var(--border-default-grey); }
+/* Entrées de menu : boutons tertiaires du DSFR sur toute la largeur */
+.menu-item.fr-btn { width: 100%; margin: 0; }
+.menu-item.is-danger { color: var(--text-default-error); }
 .menu .filter-list { padding: .25rem .5rem .5rem; }
 .display-menu { width: 19rem; }
 .display-menu .fr-segmented { margin: 0 .5rem .5rem; }
@@ -396,10 +359,10 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
   display: flex; flex-direction: column;
   width: 20rem; max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-default-grey);
+  background: var(--background-default-grey);
+  color: var(--text-default-grey);
+  box-shadow: var(--lifted-shadow);
   animation: pop-in .12s ease;
 }
 .pvtFilterBox h4 { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin: 0; padding: .75rem .75rem .5rem; font-size: 1rem; line-height: 1.5rem; }
@@ -410,12 +373,11 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
 .pvtFilterBox > p br { display: none; }
 .pvtFilterBox .pvtSearch { flex-basis: 100%; margin: 0 0 .25rem; }
 .pvtFilterBox > p .fr-btn { margin: 0; }
-.pvtFilterBox .pvtCheckContainer { flex: 1; min-height: 4rem; max-height: 19rem; overflow-y: auto; padding: .25rem .75rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.pvtFilterBox .pvtCheckContainer { flex: 1; min-height: 4rem; max-height: 19rem; overflow-y: auto; padding: .25rem .75rem; border-top: 1px solid var(--border-default-grey); border-bottom: 1px solid var(--border-default-grey); }
 .pvtCheckContainer > p { margin: 0; padding: .125rem 0; content-visibility: auto; contain-intrinsic-size: auto 2rem; }
 .pvtCheckContainer .fr-checkbox-group { display: flex; align-items: center; gap: .25rem; }
 .pvtCheckContainer .fr-checkbox-group .fr-label { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: nowrap; }
-.pvtCheckContainer .fr-label .value { flex: 1; min-width: 0; }
-.pvtCheckContainer .fr-label .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pvtCheckContainer .fr-label .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pvtCheckContainer .fr-label .count { margin-left: auto; padding-left: .5rem; color: var(--text-mention-grey); font-size: .75rem; font-variant-numeric: tabular-nums; }
 .pvtCheckContainer .is-empty .value { color: var(--text-mention-grey); font-style: italic; }
 .pvtCheckContainer .fp-only { margin: 0; visibility: hidden; }
@@ -424,37 +386,23 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
 .pvtFilterBox > p:last-child { display: flex; flex-direction: row-reverse; justify-content: flex-start; gap: .5rem; padding: .75rem; }
 .pvtFilterBox > p:last-child .fr-btn { margin: 0; }
 
-/* Info-bulle */
-.tooltip {
-  position: fixed; z-index: 60;
-  max-width: 19rem;
-  padding: .5rem .75rem;
-  background: var(--background-inverted-grey, #161616); color: var(--text-inverted-grey);
-  box-shadow: var(--shadow-lg);
-  font-size: .75rem; line-height: 1.25rem;
-  pointer-events: none;
-  animation: fade-in .1s ease;
-}
+/* Info-bulle (fr-tooltip du DSFR) : contenu sur plusieurs lignes */
+.tooltip { pointer-events: none; }
 .tt-line, .tt-value { display: flex; justify-content: space-between; gap: .875rem; }
-.tt-line span { opacity: .75; }
-.tt-value { margin-top: .375rem; padding-top: .375rem; border-top: 1px solid currentColor; }
+.tt-line span, .tt-hint { color: var(--text-mention-grey); }
+.tt-value { margin-top: .375rem; padding-top: .375rem; border-top: 1px solid var(--border-default-grey); }
 .tt-value b { font-size: .875rem; font-variant-numeric: tabular-nums; }
-.tt-hint { margin-top: .25rem; opacity: .7; }
+.tt-hint { margin-top: .25rem; }
 
-/* Notification */
+/* Notification : alerte du DSFR (fr-alert--sm), fond opaque, en bas de l'écran */
 .toast {
-  position: fixed; z-index: 70; left: 50%; bottom: 1rem;
-  max-width: calc(100vw - 2rem);
-  padding: .5rem 1rem;
-  background: var(--background-inverted-grey, #161616); color: var(--text-inverted-grey);
-  box-shadow: var(--shadow-lg);
-  font-size: .875rem;
-  opacity: 0; transform: translate(-50%, 8px);
-  transition: opacity .18s, transform .18s;
+  position: fixed; z-index: 70; left: 0; right: 0; bottom: 1rem; margin: 0 auto;
+  width: max-content; max-width: calc(100vw - 2rem);
+  background-color: var(--background-default-grey);
+  box-shadow: var(--lifted-shadow);
+  animation: fade-in .18s ease;
 }
-.toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
-.toast.is-error { background: var(--background-flat-error); color: var(--text-inverted-grey); }
-.toast.is-success { background: var(--background-flat-success); color: var(--text-inverted-grey); }
+.toast p { margin: 0; }
 
 /* ==========================================================================
    Petites largeurs (widget étroit dans Grist, panneau latéral ouvert…)
@@ -466,7 +414,7 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
     grid-template-rows: minmax(0, 58vh) auto minmax(0, 1fr);
     grid-template-areas: "config" "bar" "stage";
   }
-  #config { border-right: 0; border-bottom: 1px solid var(--border); }
+  #config { border-right: 0; border-bottom: 1px solid var(--border-default-grey); }
   body.is-config #viewbar { margin: .5rem .5rem 0; }
   body.is-config #stage { margin: 0 .5rem .5rem; }
   td.pvtUnused { max-height: 8rem; }

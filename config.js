@@ -25,8 +25,11 @@ const TCDConfig = (function () {
     $id('col-totals').addEventListener('change', e => app.update({ colTotals: e.target.checked }));
     $id('subtotals').addEventListener('change', e => app.update({ subtotals: e.target.checked }));
     $id('heat-scope').addEventListener('change', e => setRenderer(TCDRender.nameOf('heat', e.target.value)));
-    segmented($id('renderer-seg'), v => setRenderer(TCDRender.nameOf(v, $id('heat-scope').value)));
-    segmented($id('density-seg'), v => app.update({ density: v }));
+    // Boutons segmentés du DSFR, construits comme ceux du menu « Affichage »
+    $id('renderer-seg').replaceWith(Object.assign(UI.segmented('Mise en forme', TCDRender.STYLES, null,
+      v => setRenderer(TCDRender.nameOf(v, $id('heat-scope').value))), { id: 'renderer-seg' }));
+    $id('density-seg').replaceWith(Object.assign(UI.segmented('Densité', TCDRender.DENSITIES, null,
+      v => app.update({ density: v })), { id: 'density-seg' }));
 
     $id('swap-axes').addEventListener('click', swapAxes);
     $id('clear-filters').addEventListener('click', () => clearFilter(null));
@@ -49,11 +52,6 @@ const TCDConfig = (function () {
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && openBox()) { e.stopImmediatePropagation(); closeFilterBoxes(); }
     }, true);
-  }
-
-  /** Bouton segmenté du DSFR (boutons radio) : choix de l'utilisateur */
-  function segmented(root, onPick) {
-    root.addEventListener('change', e => { if (e.target.type === 'radio') { onPick(e.target.value); } });
   }
 
   function setSegmented(root, value) {
@@ -140,10 +138,12 @@ const TCDConfig = (function () {
     select.empty().append(groups, known.size ? others : []).val(current).addClass('fr-select');
   }
 
+  /** Type du champ : badge du DSFR, une couleur par type */
   function typeBadge(field) {
-    if (field && field.type === 'number') { return el('span', { class: 'ft ft-number', title: 'Nombre' }, '#'); }
-    if (field && field.type === 'date') { return el('span', { class: 'ft ft-date', title: 'Date', html: Icons.get('calendar', 11) }); }
-    return el('span', { class: 'ft ft-text', title: 'Texte' }, 'Aa');
+    const type = field ? field.type : 'text';
+    const [color, title, text] = type === 'number' ? ['green-emeraude', 'Nombre', '#']
+      : type === 'date' ? ['orange-terre-battue', 'Date', 'Date'] : ['purple-glycine', 'Texte', 'Abc'];
+    return el('span', { class: `ft fr-badge fr-badge--sm fr-badge--no-icon fr-badge--${color}`, title }, text);
   }
 
   function decorateChip(li, fields) {
@@ -158,11 +158,12 @@ const TCDConfig = (function () {
     li.title = field && field.parent ? `${field.parent} regroupé par ${attr.split(' › ').pop().toLowerCase()}` : attr;
     li.prepend(typeBadge(field));
     const triangle = li.querySelector('.pvtTriangle');
-    triangle.innerHTML = Icons.get('filter', 12);
+    triangle.textContent = '';
+    triangle.classList.add('fr-icon-filter-line', 'fr-icon--xs');
     triangle.title = 'Filtrer les valeurs';
     triangle.addEventListener('click', placeFilterBox);
     li.append(el('button', {
-      type: 'button', class: 'chip-btn chip-remove', title: 'Retirer', 'aria-label': `Retirer ${attr}`, html: Icons.get('x', 12),
+      type: 'button', class: 'chip-btn chip-remove fr-icon-close-line fr-icon--xs', title: 'Retirer', 'aria-label': `Retirer ${attr}`,
       onclick: e => { e.stopPropagation(); moveTo(attr, 'unused'); },
     }));
     li.addEventListener('click', e => {
@@ -206,10 +207,10 @@ const TCDConfig = (function () {
     if (UI.isOpenFor(anchor)) { UI.closePopover(); return; }
     const zone = zoneOf(anchor);
     const items = [];
-    if (zone !== 'rows') { items.push({ icon: 'rows', label: zone === 'cols' ? 'Déplacer vers les lignes' : 'Ajouter aux lignes', onClick: () => moveTo(attr, 'rows') }); }
-    if (zone !== 'cols') { items.push({ icon: 'cols', label: zone === 'rows' ? 'Déplacer vers les colonnes' : 'Ajouter aux colonnes', onClick: () => moveTo(attr, 'cols') }); }
-    items.push({ icon: 'filter', label: 'Filtrer les valeurs…', onClick: () => openFilter(attr, anchor) });
-    if (zone !== 'unused') { items.push('sep', { icon: 'x', label: 'Retirer du tableau', danger: true, onClick: () => moveTo(attr, 'unused') }); }
+    if (zone !== 'rows') { items.push({ icon: 'fr-icon-layout-row-line', label: zone === 'cols' ? 'Déplacer vers les lignes' : 'Ajouter aux lignes', onClick: () => moveTo(attr, 'rows') }); }
+    if (zone !== 'cols') { items.push({ icon: 'fr-icon-layout-column-line', label: zone === 'rows' ? 'Déplacer vers les colonnes' : 'Ajouter aux colonnes', onClick: () => moveTo(attr, 'cols') }); }
+    items.push({ icon: 'fr-icon-filter-line', label: 'Filtrer les valeurs…', onClick: () => openFilter(attr, anchor) });
+    if (zone !== 'unused') { items.push('sep', { icon: 'fr-icon-close-line', label: 'Retirer du tableau', danger: true, onClick: () => moveTo(attr, 'unused') }); }
     UI.openPopover(anchor, UI.menu(items, attr));
   }
 
@@ -291,10 +292,7 @@ const TCDConfig = (function () {
     const anchor = visible(pendingAnchor) ? pendingAnchor : e.currentTarget;
     pendingAnchor = null;
     document.querySelectorAll('#filter-layer .pvtFilterBox').forEach(b => { if (b !== box) { b.style.display = 'none'; } });
-    const r = anchor.getBoundingClientRect();
-    const w = box.offsetWidth, h = box.offsetHeight;
-    box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
-    box.style.top = (r.bottom + 6 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+    UI.placeNear(box, anchor.getBoundingClientRect());
     const search = box.querySelector('input.pvtSearch');
     if (search) { search.focus({ preventScroll: true }); }
   }

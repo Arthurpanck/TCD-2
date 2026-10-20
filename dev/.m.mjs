@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+import fs from 'fs';
+const mock = fs.readFileSync('dev/mock-grist.js', 'utf8');
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1000, height: 700 } });
+await p.addInitScript(() => { window.__MOCK_OPTIONS__ = { settings: { rows: ['Region'], cols: ['Annee'], vals: ['Montant'], aggregatorName: 'Somme' } }; });
+await p.route('**/grist-plugin-api.js', r => r.fulfill({ body: mock, contentType: 'application/javascript' }));
+await p.goto('http://localhost:8765/index.html');
+await p.waitForTimeout(1500);
+await p.click('#btn-export');
+await p.waitForTimeout(300);
+console.log(await p.evaluate(() => { const it = document.querySelector('.menu-item'); const i = it.querySelector('.icon'); const s = it.querySelector('span:not(.icon)'); const cs = getComputedStyle(it); return JSON.stringify({ html: it.outerHTML, gap: cs.gap, display: cs.display, icon: i.getBoundingClientRect().toJSON(), text: s.getBoundingClientRect().toJSON(), iconCs: [getComputedStyle(i).display, getComputedStyle(i).width] }); }));
+await p.locator('.popover').screenshot({ path: process.argv[2] });
+await b.close();
