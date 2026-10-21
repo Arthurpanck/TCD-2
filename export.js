@@ -210,7 +210,7 @@ const TCDExport = (function () {
           if (parent || label === TCDData.EMPTY) { cell.font = { italic: label === TCDData.EMPTY, color: { argb: parent ? 'FFA0A7B4' : 'FF8A93A3' } }; }
         });
         // Les lignes repliées dans le widget le sont aussi dans Excel (plan)
-        if (settingsHasOutline(ctx, n)) { xrow.outlineLevel = row.level; }
+        if (ctx.settings.subtotals && n > 1) { xrow.outlineLevel = row.level; }
         if (hiddenUnder.some(p => p.every((v, i) => row.key[i] === v) && row.key.length > p.length)) { xrow.hidden = true; }
         if (isGroup && collapsed.has(JSON.stringify(row.key))) { hiddenUnder.push(row.key); }
       } else {
@@ -253,8 +253,6 @@ const TCDExport = (function () {
     return wb;
   }
 
-  const settingsHasOutline = (ctx, n) => ctx.settings.subtotals && n > 1;
-
   function setValue(cell, v, numFmt) {
     if (typeof v === 'number' && isFinite(v)) {
       cell.value = Number(v.toPrecision(12));
@@ -290,5 +288,5 @@ const TCDExport = (function () {
     }
   }
 
-  return { matrix, copy, csv, xlsx };
+  return { copy, csv, xlsx };
 })();

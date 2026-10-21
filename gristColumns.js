@@ -152,5 +152,5 @@ const TCDGrist = (function () {
   /** Empreinte des métadonnées, pour savoir si les libellés ou formats ont changé */
   const signature = () => JSON.stringify(meta);
 
-  return { load, formatter, excelFormat, label, signature, isAvailable: () => meta.available };
+  return { load, formatter, excelFormat, label, signature };
 })();

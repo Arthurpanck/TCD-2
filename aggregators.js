@@ -154,7 +154,6 @@ const TCDAggregators = (function () {
 
   /** Description lisible du calcul, ex. « Somme de Montant » */
   function describe(name, vals) {
-    const L = x => x;
     const v = (vals || []).filter(Boolean);
     const label = LABELS[name] || name;
     if (name === 'Nombre') { return 'Nombre de lignes'; }
@@ -162,10 +161,10 @@ const TCDAggregators = (function () {
       return label;
     }
     if (!v.length) { return label; }
-    if (name === 'Moyenne pondérée' && v.length > 1) { return `Moyenne de ${L(v[0])} pondérée par ${L(v[1])}`; }
-    if (name === 'Ratio de sommes' && v.length > 1) { return `${L(v[0])} / ${L(v[1])}`; }
-    if (kind(name) === 'percent') { return `${label} (${L(v[0])})`; }
-    return `${label} de ${L(v[0])}`;
+    if (name === 'Moyenne pondérée' && v.length > 1) { return `Moyenne de ${v[0]} pondérée par ${v[1]}`; }
+    if (name === 'Ratio de sommes' && v.length > 1) { return `${v[0]} / ${v[1]}`; }
+    if (kind(name) === 'percent') { return `${label} (${v[0]})`; }
+    return `${label} de ${v[0]}`;
   }
 
   return { GROUPS, LABELS, normalizeName, inputLabels, formatOf, forUI, describe };

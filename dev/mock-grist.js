@@ -39,7 +39,12 @@
     return rows;
   }
   const data = window.__MOCK_DATA__ || sampleData(Number(params.get('n') || 400));
-  window.__mockGrist = { store, data, emitRecords: d => recordsCb && recordsCb(d || data), setLog: [] };
+  window.__mockGrist = {
+    store, data, setLog: [], failSave: false,
+    emitRecords: d => recordsCb && recordsCb(d || data),
+    // Options envoyées par Grist (autre utilisateur, autre onglet…)
+    emitOptions: o => optionsCb && optionsCb(o, {}),
+  };
 
   window.grist = {
     ready(opts) { window.__mockGrist.readyOpts = opts; },
@@ -48,6 +53,8 @@
     onOptions(cb) { optionsCb = cb; setTimeout(() => cb(store, {}), 10); },
     async getOption(k) { return store[k]; },
     async setOption(k, v) {
+      // Utilisateur sans droit d'édition : Grist refuse l'enregistrement
+      if (window.__mockGrist.failSave) { throw new Error('Access denied'); }
       store[k] = v; window.__mockGrist.setLog.push([k, v]);
       try { localStorage.setItem('mockGristOptions', JSON.stringify(store)); } catch (e) {}
     },

@@ -5,8 +5,7 @@
  * - Configuration ouverte via le bouton « Ouvrir la configuration » du panneau Grist (onEditOptions)
  * - Réglages enregistrés dans les options du widget (clé `settings`, compatible avec les versions précédentes)
  */
-const { el } = UI;
-const $id = id => document.getElementById(id);
+const { el, $id } = UI;
 
 const DEFAULTS = {
   title: '',
@@ -53,6 +52,7 @@ const state = {
   building: false,
   saveTimer: null,
   savePending: false,
+  saveErrorShown: false,
 };
 const $host = $('#app');
 
@@ -225,19 +225,22 @@ function refreshPivot() {
 /** Appelé par pivotUI après chaque calcul : enregistre les réglages et met en forme le tableau */
 function onRefresh(pvt) {
   const ds = state.dataset;
-  const exclusions = {};
+  const before = state.settings;
+  // Champs absents des données reçues (table vide, liste filtrée par un widget lié, colonne masquée) :
+  // pivotUI ne les connaît pas, mais ils restent dans les réglages pour revenir avec les données
+  const absent = key => !ds.toAttr(key);
+  const exclusions = Object.fromEntries(Object.entries(before.exclusions).filter(([k]) => absent(k)));
   for (const [k, v] of Object.entries(pvt.exclusions || {})) { exclusions[ds.fromAttr(k)] = v.map(String); }
   const patch = {
-    rows: pvt.rows.map(ds.fromAttr),
-    cols: pvt.cols.map(ds.fromAttr),
-    vals: pvt.vals.map(ds.fromAttr),
+    rows: [...pvt.rows.map(ds.fromAttr), ...before.rows.filter(absent)],
+    cols: [...pvt.cols.map(ds.fromAttr), ...before.cols.filter(absent)],
+    vals: pvt.vals.length ? pvt.vals.map(ds.fromAttr) : before.vals.filter(absent),
     aggregatorName: pvt.aggregatorName,
     rendererName: pvt.rendererName,
     rowOrder: pvt.rowOrder,
     colOrder: pvt.colOrder,
     exclusions,
   };
-  const before = state.settings;
   const next = normalizeSettings({ ...before, ...patch });
   const changed = JSON.stringify(next) !== JSON.stringify(before);
   if (changed && ['rows', 'cols', 'exclusions', 'aggregatorName', 'vals'].some(k => JSON.stringify(next[k]) !== JSON.stringify(before[k]))) {
@@ -256,9 +259,8 @@ function onRefresh(pvt) {
   showResult();
 }
 
-function isConfigured(s) {
-  return s.rows.length > 0 || s.cols.length > 0;
-}
+/** Tableau construit : au moins un champ en lignes ou en colonnes parmi ceux des données reçues */
+const isConfigured = pvt => Boolean(pvt) && (pvt.rows.length > 0 || pvt.cols.length > 0);
 
 /** Affiche le tableau calculé par pivotUI, ou un message d'aide */
 function showResult() {
@@ -272,7 +274,7 @@ function showResult() {
     renderSummary(s);
     return showMessage('fr-icon-table-line', 'La table source est vide', "Ajoutez des lignes dans la table liée à ce widget : le tableau croisé se mettra à jour automatiquement.");
   }
-  if (!pvt || !isConfigured(s)) {
+  if (!isConfigured(pvt)) {
     renderSummary(s);
     if (state.configOpen) {
       return showMessage('fr-icon-layout-grid-line', 'Construisez votre tableau', 'Glissez un champ dans « Lignes » ou « Colonnes », ou cliquez sur un champ pour choisir où le placer.');
@@ -317,7 +319,7 @@ function renderSummary(s) {
   const box = $id('summary');
   const pvt = state.pvt;
   const parts = [];
-  if (pvt && isConfigured(s)) {
+  if (isConfigured(pvt)) {
     const dims = [pvt.rows.join(', '), pvt.cols.join(', ')].filter(Boolean);
     const title = s.title.trim();
     if (title) {
@@ -623,8 +625,7 @@ function focusCell(td) {
   td.tabIndex = -1;
   td.focus({ preventScroll: false });
   td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  const r = td.getBoundingClientRect();
-  showTooltip(td, r.right - 8, r.bottom - 4);
+  showTooltip(td);
 }
 
 // ---------------------------------------------------------------------------
@@ -687,7 +688,7 @@ function selectRows(ids) {
 }
 
 // ---------------------------------------------------------------------------
-// Barre de consultation : affichage et export
+// Barre de consultation : export
 // ---------------------------------------------------------------------------
 
 /** Ce que les exports doivent savoir du tableau affiché */
@@ -844,14 +845,15 @@ function start() {
   $id('cfg-preview').addEventListener('click', openPreview);
   $id('preview-close').addEventListener('click', closePreview);
   $id('preview').addEventListener('mousedown', e => { if (e.target === e.currentTarget) { closePreview(); } });
-  // Échap ferme l'aperçu, après un éventuel menu ouvert dedans (sans désélectionner la case)
+  // Échap ferme ce qui est ouvert, du plus proche au plus lointain : menu, fenêtre de filtre, aperçu ;
+  // sinon il désélectionne la case
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && previewOpen() && $id('popover').hidden) { e.stopImmediatePropagation(); closePreview(); }
-  }, true);
-  // Échap désélectionne, sauf s'il ferme d'abord un menu (vérifié avant que le menu ne se ferme)
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && $id('popover').hidden) { clearSelection(); }
-  }, true);
+    if (e.key !== 'Escape') { return; }
+    if (!$id('popover').hidden) { UI.closePopover(); }
+    else if (TCDConfig.closeFilters()) { /* fenêtre de filtre fermée */ }
+    else if (previewOpen()) { closePreview(); }
+    else { clearSelection(); }
+  });
 
   showMessage('fr-icon-table-line', 'Chargement des données…', '');
   $id('output').classList.add('is-loading');

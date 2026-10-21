@@ -1,6 +1,6 @@
 /**
  * Rendus du tableau : ceux de subtotal.js (sous-totaux repliables, carte de chaleur, barres),
- * complétés d'une mise en forme : couleurs du thème Grist, en-têtes figés, libellés.
+ * complétés d'une mise en forme : couleurs du DSFR (thème clair ou sombre), en-têtes figés, libellés.
  */
 const TCDRender = (function () {
   const { EMPTY } = TCDData;
@@ -12,7 +12,7 @@ const TCDRender = (function () {
     'Carte de chaleur par ligne': ['heat', 'row'],
     'Carte de chaleur par colonne': ['heat', 'col'],
   };
-  /** Choix proposés à l'utilisateur (panneau de configuration et menu « Affichage ») */
+  /** Choix proposés dans le panneau de configuration (DENSITIES valide aussi les réglages) */
   const STYLES = [['table', 'Tableau'], ['heat', 'Chaleur'], ['bars', 'Barres']];
   const DENSITIES = [['compact', 'Compacte'], ['standard', 'Standard'], ['comfortable', 'Aérée']];
   const LEGACY = { 'Table Barchart': 'Table avec barres', 'Heatmap': 'Carte de chaleur', 'Row Heatmap': 'Carte de chaleur par ligne', 'Col Heatmap': 'Carte de chaleur par colonne' };
@@ -108,7 +108,6 @@ const TCDRender = (function () {
    * @param {{aggLabel: string, rowTotals: boolean, colTotals: boolean, rows: number, cols: number}} ctx
    */
   function decorate(table, ctx) {
-    table.classList.add('tcd-table');
     table.classList.toggle('no-subtotals', !ctx.subtotals);
     table.classList.toggle('hide-row-totals', !ctx.rowTotals && ctx.cols > 0);
     table.classList.toggle('hide-col-totals', !ctx.colTotals && ctx.rows > 0);

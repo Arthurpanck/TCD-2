@@ -2,16 +2,15 @@
 const UI = (function () {
   const pop = document.getElementById('popover');
   const toastEl = document.getElementById('toast');
-  let anchor = null, onClose = null, align = 'start', toastTimer = null;
+  const $id = id => document.getElementById(id);
+  let anchor = null, align = 'start', toastTimer = null;
 
   function el(tag, attrs, ...children) {
     const node = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
       if (v === undefined || v === null || v === false) { continue; }
       if (k === 'class') { node.className = v; }
-      else if (k === 'html') { node.innerHTML = v; }
       else if (k.startsWith('on') && typeof v === 'function') { node.addEventListener(k.slice(2), v); }
-      else if (k === 'dataset') { Object.assign(node.dataset, v); }
       else { node.setAttribute(k, v === true ? '' : v); }
     }
     for (const c of children.flat()) {
@@ -43,8 +42,6 @@ const UI = (function () {
     closePopover();
     anchor = anchorEl;
     align = opts.align || 'start';
-    onClose = opts.onClose || null;
-    pop.className = 'popover ' + (opts.className || '');
     pop.replaceChildren(content);
     pop.hidden = false;
     anchorEl.setAttribute('aria-expanded', 'true');
@@ -57,10 +54,7 @@ const UI = (function () {
     if (pop.hidden) { return; }
     pop.hidden = true;
     if (anchor) { anchor.setAttribute('aria-expanded', 'false'); }
-    const cb = onClose;
     anchor = null;
-    onClose = null;
-    if (cb) { cb(); }
   }
 
   /** Menu d'actions : items = [{ icon (classe fr-icon-*), label, onClick, danger }] ou 'sep' */
@@ -105,8 +99,7 @@ const UI = (function () {
   document.addEventListener('mousedown', e => {
     if (!pop.hidden && !pop.contains(e.target) && !(anchor && anchor.contains(e.target))) { closePopover(); }
   }, true);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePopover(); } });
   window.addEventListener('resize', () => position());
 
-  return { el, placeNear, openPopover, closePopover, isOpenFor, menu, segmented, toast };
+  return { el, $id, placeNear, openPopover, closePopover, isOpenFor, menu, segmented, toast };
 })();

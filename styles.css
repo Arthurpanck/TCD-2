@@ -1,7 +1,7 @@
 /* ==========================================================================
    Tableau croisé dynamique — habillage DSFR
    Les composants (boutons, tags, badges, champs, interrupteurs, boutons
-   segmentés, accordéon, cases à cocher, tableau, encart) sont ceux du
+   segmentés, cases à cocher, tableau, encart, alerte, info-bulle, modale) sont ceux du
    système de design de l'État (dsfr.min.css). Ce fichier ne fait que la mise
    en page du widget et ce qui est propre au tableau croisé (pivotUI,
    subtotal.js), avec les couleurs du DSFR : le thème sombre du DSFR
@@ -33,9 +33,6 @@ body { margin: 0; overflow: hidden; background: var(--background-default-grey); 
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas: "bar" "stage";
 }
-#viewbar { grid-area: bar; }
-#stage { grid-area: stage; }
-#config { grid-area: config; }
 
 body.is-config { background: var(--background-alt-grey); }
 /* La configuration occupe tout le widget ; le tableau s'ouvre en aperçu dans une modale */
@@ -46,9 +43,8 @@ body.is-config #app {
 body.is-config #app > #viewbar, body.is-config #app > #stage { display: none; }
 
 /* Modale d'aperçu du DSFR, agrandie à presque tout le widget, sous les menus et fenêtres de filtre */
-.preview-modal { z-index: 40; }
 /* Visible tout de suite (fondu seul) : le bouton Fermer peut recevoir le focus dès l'ouverture */
-.preview-modal, .preview-modal.fr-modal--opened { transition: opacity .2s; }
+.preview-modal { z-index: 40; transition: opacity .2s; }
 .preview-modal::before, .preview-modal::after { display: none; }
 .preview-body { flex: 1; display: flex; flex-direction: column; margin: 1rem; max-height: none; overflow: hidden; }
 .preview-head { justify-content: space-between; gap: 1rem; padding: .75rem 1rem .25rem; }
@@ -61,6 +57,7 @@ body.is-config #app > #viewbar, body.is-config #app > #stage { display: none; }
    ========================================================================== */
 
 #viewbar {
+  grid-area: bar;
   display: flex;
   align-items: center;
   gap: .5rem;
@@ -97,7 +94,7 @@ body.is-config #viewbar { margin: .75rem .75rem 0; border: 1px solid var(--borde
    Zone d'affichage : le tableau du DSFR (fr-table) devient la zone de défilement
    ========================================================================== */
 
-#stage { position: relative; min-height: 0; background: var(--background-default-grey); }
+#stage { grid-area: stage; position: relative; min-height: 0; background: var(--background-default-grey); }
 body.is-config #stage { margin: 0 .75rem .75rem; border: 1px solid var(--border-default-grey); overflow: hidden; }
 
 .output.fr-table { position: absolute; inset: 0; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -250,6 +247,7 @@ table.pvtTable td.has-bar.bar-neg::after { background-color: var(--background-fl
    ========================================================================== */
 
 #config {
+  grid-area: config;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -258,7 +256,7 @@ table.pvtTable td.has-bar.bar-neg::after { background-color: var(--background-fl
 }
 .cfg-head {
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
-  padding: .75rem 1rem;
+  padding: .5rem 1rem;
   border-bottom: 1px solid var(--border-default-grey);
 }
 .cfg-title { flex: 1; display: flex; align-items: center; gap: .75rem; min-width: 0; }
@@ -278,15 +276,13 @@ table.pvtTable td.has-bar.bar-neg::after { background-color: var(--background-fl
 .cfg-title-input:focus { box-shadow: inset 0 -2px 0 0 var(--border-action-high-blue-france); }
 .cfg-title-edit { position: absolute; right: .625rem; color: var(--text-mention-grey); pointer-events: none; }
 .cfg-title-input:focus + .cfg-title-edit { color: var(--text-action-high-blue-france); }
-.save-state { flex: none; }
 .cfg-head .fr-btns-group { flex-wrap: nowrap; margin: 0; }
 .cfg-head .fr-btns-group > li { width: auto; }
 .cfg-head .fr-btns-group .fr-btn { margin: 0 0 0 .5rem; }
-.save-state { font-size: .75rem; color: var(--text-mention-grey); }
+.save-state { flex: none; font-size: .75rem; color: var(--text-mention-grey); }
 .save-state.is-saved { color: var(--text-default-success); }
 .save-state.is-error { color: var(--text-default-error); }
 
-.cfg-head { padding-top: .5rem; padding-bottom: .5rem; }
 /* Trois colonnes qui défilent chacune : champs, disposition, affichage */
 .cfg-body {
   flex: 1; min-height: 0;

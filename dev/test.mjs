@@ -35,6 +35,13 @@ async function open(options, { width = 1280, height = 760, data, meta } = {}) {
   return page;
 }
 
+/** Mise en forme choisie comme dans le panneau : bouton segmenté « Mise en forme » (table, heat, bars) */
+const setStyle = (page, kind) => page.evaluate(k => {
+  const input = document.querySelector(`#renderer-seg input[value="${k}"]`);
+  input.checked = true;
+  input.dispatchEvent(new Event('change'));
+}, kind);
+
 async function test(name, fn) {
   try {
     await fn();
@@ -185,7 +192,7 @@ await test('sans champ en colonnes : la case « Total » d’une ligne filtre au
 await test('sélection conservée quand les données ou la mise en forme changent', async () => {
   const page = await open({ settings: { ...base, cols: ['Statut'] } });
   await page.locator(LEAF).first().click();
-  await page.evaluate(() => TCDConfig.setRenderer('Carte de chaleur'));
+  await setStyle(page, 'heat');
   await page.waitForTimeout(200);
   assert(await page.locator('td.is-selected').count() === 1, 'case sélectionnée perdue après changement de rendu');
   const strong = page.locator('td.pvtVal.is-heat-strong').first();
@@ -334,7 +341,7 @@ await test('groupes repliés conservés après un recalcul', async () => {
   const page = await open({ settings: { ...base, rows: ['Region', 'Dispositif'] } });
   await page.locator('tbody th.pvtRowLabel.rowcol0').nth(1).click();
   await page.waitForTimeout(150);
-  await page.evaluate(() => TCDConfig.setRenderer('Table avec barres'));
+  await setStyle(page, 'bars');
   await page.waitForTimeout(250);
   const collapsed = await page.locator('tbody th.pvtRowLabel.rowcol0.rowcollapsed').allTextContents();
   assert(collapsed.length === 1 && collapsed[0].includes('Bretagne'), 'repli perdu : ' + collapsed.join('|'));
@@ -376,12 +383,16 @@ await test('filtre d’un champ à plus de 1 000 valeurs (liste construite à la
   await page.close();
 });
 
-await test('export : la matrice reprend les totaux du tableau', async () => {
+await test('export CSV : en-têtes, totaux, séparateur « ; » et BOM pour Excel', async () => {
   const page = await open({ settings: base });
-  const rows = await page.evaluate(() => TCDExport.matrix(exportContext()));
+  await page.click('#btn-export');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.menu-item:has-text("CSV")')]);
+  const text = fs.readFileSync(await dl.path(), 'utf8');
+  assert(text.charCodeAt(0) === 0xFEFF, 'BOM UTF-8 absent');
+  const rows = text.slice(1).split('\r\n').map(l => l.split(';'));
   assert(rows[0].join('|') === 'Region|2022|2023|2024|2025|Total', 'en-tête : ' + rows[0].join('|'));
   const last = rows[rows.length - 1];
-  assert(last[0] === 'Total' && last[last.length - 1] === 48283695, 'ligne total : ' + last.join('|'));
+  assert(last[0] === 'Total' && last[last.length - 1] === '48283695', 'ligne total : ' + last.join('|'));
   await page.close();
 });
 
@@ -500,7 +511,7 @@ await test('titre du tableau : barre de résumé, légende pour lecteurs d’éc
   assert(await page.locator('#summary .sum-dim').count() === 0, 'description automatique masquée quand un titre existe');
   assert(!(await page.locator('table.pvtTable > caption').isVisible()), 'légende masquée à l’écran (lue par les lecteurs d’écran)');
   assert((await savedSettings(page)).title === 'Engagements 2022-2025', 'titre non enregistré');
-  await page.evaluate(() => TCDConfig.setRenderer('Carte de chaleur'));
+  await setStyle(page, 'heat');
   await page.waitForTimeout(300);
   assert(await page.locator('table.pvtTable > caption').count() === 1, 'titre perdu après un recalcul');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => exportXlsx())]);
@@ -510,6 +521,39 @@ await test('titre du tableau : barre de résumé, légende pour lecteurs d’éc
   await page.fill('#table-title', '');
   await page.waitForTimeout(300);
   assert(await page.locator('table.pvtTable > caption').count() === 0, 'légende retirée quand le titre est vide');
+  await page.close();
+});
+
+await test('table vide puis lignes revenues (widget lié filtré) : la configuration est conservée', async () => {
+  const page = await open({ settings: { ...base, exclusions: { Statut: ['Refusé'] } } });
+  const before = await page.locator('tbody th.pvtRowLabel').count();
+  await page.evaluate(() => window.__mockGrist.emitRecords([]));
+  await page.waitForTimeout(300);
+  assert((await page.locator('.fr-callout__title').textContent()).includes('vide'), 'message « table vide » attendu');
+  await page.evaluate(() => grist.__openConfig());
+  await page.locator('#font-up').click();
+  await page.waitForTimeout(500);
+  const saved = await savedSettings(page);
+  assert(saved.rows.join() === 'Region' && saved.cols.join() === 'Annee' && saved.exclusions.Statut, 'réglages perdus pendant la table vide : ' + JSON.stringify(saved));
+  await page.evaluate(() => window.__mockGrist.emitRecords());
+  await page.waitForTimeout(500);
+  assert(await page.locator('tbody th.pvtRowLabel').count() === before, 'le tableau doit revenir tel quel');
+  await page.close();
+});
+
+await test('Échap ferme d’abord la fenêtre de filtre ouverte depuis l’aperçu, puis l’aperçu', async () => {
+  const page = await open({ settings: { ...base, exclusions: { Region: ['Bretagne'] } } });
+  await page.evaluate(() => grist.__openConfig());
+  await page.click('#cfg-preview');
+  await page.click('#preview .sum-filters');
+  await page.click('.popover .filter-pill-main');
+  const box = page.locator('#filter-layer .pvtFilterBox:visible');
+  assert(await box.count() === 1, 'fenêtre de filtre attendue');
+  await page.keyboard.press('Escape');
+  assert(await box.count() === 0, 'Échap doit fermer la fenêtre de filtre');
+  assert(await page.locator('#preview #stage').isVisible(), 'l’aperçu doit rester ouvert');
+  await page.keyboard.press('Escape');
+  assert(!(await page.locator('#stage').isVisible()), 'second Échap : aperçu fermé');
   await page.close();
 });
 

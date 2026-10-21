@@ -6,8 +6,7 @@
  * Les éléments déplacés restent dans l'hôte de pivotUI, qui les retrouve par leurs classes.
  */
 const TCDConfig = (function () {
-  const { el } = UI;
-  const $id = id => document.getElementById(id);
+  const { el, $id } = UI;
   let app = null;
   let $host = null;
   let dragging = false;
@@ -25,7 +24,7 @@ const TCDConfig = (function () {
     $id('col-totals').addEventListener('change', e => app.update({ colTotals: e.target.checked }));
     $id('subtotals').addEventListener('change', e => app.update({ subtotals: e.target.checked }));
     $id('heat-scope').addEventListener('change', e => setRenderer(TCDRender.nameOf('heat', e.target.value)));
-    // Boutons segmentés du DSFR, construits comme ceux du menu « Affichage »
+    // Boutons segmentés du DSFR, construits à partir des choix de TCDRender
     $id('renderer-seg').replaceWith(Object.assign(UI.segmented('Mise en forme', TCDRender.STYLES, null,
       v => setRenderer(TCDRender.nameOf(v, $id('heat-scope').value))), { id: 'renderer-seg' }));
     $id('density-seg').replaceWith(Object.assign(UI.segmented('Densité', TCDRender.DENSITIES, null,
@@ -41,14 +40,11 @@ const TCDConfig = (function () {
     $id('cfg-done').addEventListener('click', () => app.closeConfig());
     $id('cfg-revert').addEventListener('click', () => app.revert());
 
-    // Fenêtres de filtre : fermeture par Échap ou clic à l'extérieur (équivaut à « Annuler »)
+    // Fenêtres de filtre : fermeture par clic à l'extérieur (équivaut à « Annuler ») ; Échap : voir index.js
     document.addEventListener('mousedown', e => {
       if (e.target.closest('.pvtFilterBox, .pvtTriangle, .filter-pill, .sum-filters, .popover')) { return; }
       closeFilterBoxes();
     });
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && openBox()) { e.stopImmediatePropagation(); closeFilterBoxes(); }
-    }, true);
   }
 
   function setSegmented(root, value) {
@@ -266,9 +262,11 @@ const TCDConfig = (function () {
 
   const openBox = () => [...document.querySelectorAll('#filter-layer .pvtFilterBox')].find(b => b.style.display !== 'none');
 
+  /** Ferme la fenêtre de filtre ouverte (« Annuler » de pivotUI) ; indique s'il y en avait une */
   function closeFilterBoxes() {
     const box = openBox();
     if (box) { $(box).children('p').last().find('button').last().trigger('click'); }
+    return Boolean(box);
   }
 
   /** Ouvre la fenêtre de filtre de pivotUI d'un champ, près de l'élément `anchor` */
@@ -316,7 +314,7 @@ const TCDConfig = (function () {
 
   /** Pastille de filtre actif (réutilisée dans la barre de consultation) */
   function filterPill(attr, count, compact) {
-    const pill = el('span', { class: 'filter-pill' + (compact ? ' is-compact' : '') });
+    const pill = el('span', { class: 'filter-pill' });
     // Tag du DSFR pour modifier le filtre, bouton icône du DSFR pour le supprimer
     const open = el('button', {
       type: 'button', class: 'filter-pill-main fr-tag fr-tag--sm fr-tag--icon-left fr-icon-filter-line', title: 'Modifier le filtre',
@@ -380,5 +378,5 @@ const TCDConfig = (function () {
     $id('font-up').disabled = s.fontScale >= 1.4;
   }
 
-  return { init, adopt, sync, openFilter, filterPill, setRenderer, closeFilters: closeFilterBoxes };
+  return { init, adopt, sync, openFilter, filterPill, closeFilters: closeFilterBoxes };
 })();
