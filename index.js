@@ -562,21 +562,6 @@ function restoreCollapsed(table) {
   }
 }
 
-/** Replie tous les groupes du premier niveau (en-tête de niveau de subtotal.js), ou déplie tout */
-function setAllCollapsed(collapse) {
-  const table = $id('output').querySelector('table.pvtTable');
-  if (!table) { return; }
-  if (!collapse) {
-    state.collapsed = { rows: [], cols: [] };
-    refreshPivot();
-    return;
-  }
-  const head = table.querySelector('thead th.pvtRowAxis.expanded');
-  if (head) { head.click(); }
-  saveCollapsed(table);
-  restick();
-}
-
 // ---------------------------------------------------------------------------
 // Limite d'affichage : au-delà de ROW_LIMIT lignes, les suivantes sont masquées jusqu'à demande
 // ---------------------------------------------------------------------------
@@ -705,30 +690,6 @@ function selectRows(ids) {
 // Barre de consultation : affichage et export
 // ---------------------------------------------------------------------------
 
-function openDisplayMenu(anchor) {
-  if (UI.isOpenFor(anchor)) { return UI.closePopover(); }
-  const s = state.settings;
-  const r = TCDRender.kindOf(s.rendererName);
-  // Rouvre le menu pour refléter le nouveau réglage
-  const reopen = () => { UI.closePopover(); openDisplayMenu(anchor); };
-  const groups = s.subtotals && s.rows.length > 1;
-  const root = el('div', { class: 'menu display-menu' },
-    UI.segmented('Mise en forme', TCDRender.STYLES, r.kind,
-      v => { TCDConfig.setRenderer(TCDRender.nameOf(v, r.scope)); reopen(); }),
-    groups ? el('div', { class: 'menu-title' }, 'Groupes') : null,
-    groups ? el('ul', { class: 'fr-btns-group fr-btns-group--inline fr-btns-group--sm' },
-      el('li', {}, el('button', { type: 'button', class: 'fr-btn fr-btn--secondary', onclick: () => { setAllCollapsed(true); UI.closePopover(); } }, 'Tout replier')),
-      el('li', {}, el('button', { type: 'button', class: 'fr-btn fr-btn--secondary', onclick: () => { setAllCollapsed(false); UI.closePopover(); } }, 'Tout déplier'))) : null,
-    UI.segmented('Densité', TCDRender.DENSITIES, s.density,
-      v => { update({ density: v }); reopen(); }),
-    el('div', { class: 'menu-title' }, 'Taille du texte'),
-    el('div', { class: 'stepper' },
-      el('button', { type: 'button', class: 'fr-btn fr-btn--tertiary fr-btn--sm', title: 'Réduire', onclick: () => { update({ fontScale: +(s.fontScale - 0.1).toFixed(2) }); reopen(); } }, 'A−'),
-      el('span', {}, Math.round(s.fontScale * 100) + ' %'),
-      el('button', { type: 'button', class: 'fr-btn fr-btn--tertiary fr-btn--sm', title: 'Agrandir', onclick: () => { update({ fontScale: +(s.fontScale + 0.1).toFixed(2) }); reopen(); } }, 'A+')));
-  UI.openPopover(anchor, root, { align: 'end' });
-}
-
 /** Ce que les exports doivent savoir du tableau affiché */
 function exportContext() {
   const pvt = state.pvt;
@@ -766,7 +727,6 @@ function openExportMenu(anchor) {
     { icon: 'fr-icon-file-download-line', label: 'Excel mis en forme (.xlsx)', onClick: exportXlsx },
     { icon: 'fr-icon-download-line', label: 'CSV, données brutes', onClick: () => TCDExport.csv(exportContext()) },
     { icon: 'fr-icon-clipboard-line', label: 'Copier (données brutes)', onClick: () => TCDExport.copy(exportContext()).then(() => UI.toast('Tableau copié : collez-le dans un tableur ou un courriel.', 'success')) },
-    { icon: 'fr-icon-printer-line', label: 'Imprimer', onClick: () => window.print() },
   ], 'Exporter le tableau'), { align: 'end' });
 }
 
@@ -855,7 +815,6 @@ function handleOptions(options) {
 }
 
 function start() {
-  $id('btn-display').addEventListener('click', e => openDisplayMenu(e.currentTarget));
   $id('btn-export').addEventListener('click', e => openExportMenu(e.currentTarget));
   // Échap désélectionne, sauf s'il ferme d'abord un menu (vérifié avant que le menu ne se ferme)
   document.addEventListener('keydown', e => {

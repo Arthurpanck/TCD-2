@@ -35,7 +35,7 @@ Les réglages sont enregistrés automatiquement dans le widget.
 - Nombres au format de la colonne dans Grist (devise, pourcentage, décimales, séparateurs)
 - Densité (compacte, standard, aérée) et taille du texte
 - Export Excel mis en forme (.xlsx) : formats de nombres des colonnes Grist (devise, %, décimales), sous-totaux en plan repliable (groupes repliés dans le widget repliés dans Excel), totaux en gras, en-têtes et volets figés, carte de chaleur et barres en mise en forme conditionnelle
-- Export des données brutes : copie pour un tableur, CSV (séparateur « ; », compatible Excel français) ; impression
+- Export des données brutes : copie pour un tableur, CSV (séparateur « ; », compatible Excel français)
 
 **Configuration** (bouton « Ouvrir la configuration » de Grist)
 - Champs typés (texte, nombre, date) avec recherche

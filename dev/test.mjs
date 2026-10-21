@@ -221,9 +221,9 @@ await test('sous-totaux par groupe, repli et dépli', async () => {
   await first.click();
   await page.waitForTimeout(100);
   assert(await leaves.count() === 40, 'groupe non déplié');
-  await page.evaluate(() => setAllCollapsed(true));
+  await page.locator('thead th.pvtRowAxis.expanded').first().click();
   await page.waitForTimeout(150);
-  assert(await leaves.count() === 0, '« Tout replier » doit replier chaque région');
+  assert(await leaves.count() === 0, 'l’en-tête du niveau doit replier chaque région');
   await page.close();
 });
 
