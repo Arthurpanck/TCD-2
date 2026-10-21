@@ -60,7 +60,7 @@ node dev/test.mjs                  # tests de bout en bout
 node dev/fuzz.mjs 42 300           # robustesse : 300 actions au hasard (graine 42)
 ```
 
-À chaque publication, changer la version `?v=` des fichiers dans `index.html` : un CDN comme raw.githack ne sert alors jamais un mélange d'anciens et de nouveaux fichiers.
+À chaque publication, changer la version `?v=` des fichiers dans `index.html`, dans un commit poussé **après** que GitHub sert les nouveaux fichiers (raw.githubusercontent.com met quelques minutes à se mettre à jour) : sinon raw.githack enregistre les anciens fichiers sous la nouvelle version.
 
 ### Ce qui vient des librairies, du DSFR et du widget
 
