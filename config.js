@@ -32,6 +32,9 @@ const TCDConfig = (function () {
       v => app.update({ density: v })), { id: 'density-seg' }));
 
     $id('table-title').addEventListener('input', e => app.update({ title: e.target.value }));
+    const font = step => app.update({ fontScale: +(app.settings().fontScale + step).toFixed(2) });
+    $id('font-down').addEventListener('click', () => font(-0.1));
+    $id('font-up').addEventListener('click', () => font(0.1));
     $id('swap-axes').addEventListener('click', swapAxes);
     $id('clear-filters').addEventListener('click', () => clearFilter(null));
     $id('field-search').addEventListener('input', filterFieldList);
@@ -372,6 +375,9 @@ const TCDConfig = (function () {
     $id('col-totals').checked = s.colTotals;
     $id('subtotals').checked = s.subtotals;
     setSegmented($id('density-seg'), s.density);
+    $id('font-value').textContent = Math.round(s.fontScale * 100) + ' %';
+    $id('font-down').disabled = s.fontScale <= 0.8;
+    $id('font-up').disabled = s.fontScale >= 1.4;
   }
 
   return { init, adopt, sync, openFilter, filterPill, setRenderer, closeFilters: closeFilterBoxes };

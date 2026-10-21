@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/utility/icons/icons.min.css">
     <!-- ?v= : version des fichiers du widget, à changer à chaque publication pour qu'un CDN (raw.githack…)
          ne serve jamais un mélange d'anciens et de nouveaux fichiers -->
-    <link rel="stylesheet" href="styles.css?v=20261020-1">
+    <link rel="stylesheet" href="styles.css?v=20261021-1">
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
@@ -132,6 +132,15 @@
 
               <div id="density-seg"></div>
 
+              <div class="font-size">
+                <p class="fr-label" id="font-size-label">Taille du texte</p>
+                <div class="stepper" role="group" aria-labelledby="font-size-label">
+                  <button type="button" id="font-down" class="fr-btn fr-btn--secondary fr-btn--sm" aria-label="Réduire le texte">A−</button>
+                  <span id="font-value" aria-live="polite">100 %</span>
+                  <button type="button" id="font-up" class="fr-btn fr-btn--secondary fr-btn--sm" aria-label="Agrandir le texte">A+</button>
+                </div>
+              </div>
+
             </section>
           </div>
 
@@ -144,7 +153,6 @@
       <header id="viewbar">
         <div id="summary" class="summary"></div>
         <div class="viewbar-actions">
-          <button type="button" id="btn-display" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-equalizer-line fr-btn--icon-left" aria-haspopup="true">Affichage</button>
           <button type="button" id="btn-export" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-download-line fr-btn--icon-left" aria-haspopup="true">Exporter</button>
         </div>
       </header>
@@ -175,13 +183,13 @@
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     </div>
 
-    <script src="ui.js?v=20261020-1"></script>
-    <script src="gristColumns.js?v=20261020-1"></script>
-    <script src="data.js?v=20261020-1"></script>
-    <script src="aggregators.js?v=20261020-1"></script>
-    <script src="render.js?v=20261020-1"></script>
-    <script src="export.js?v=20261020-1"></script>
-    <script src="config.js?v=20261020-1"></script>
-    <script src="index.js?v=20261020-1"></script>
+    <script src="ui.js?v=20261021-1"></script>
+    <script src="gristColumns.js?v=20261021-1"></script>
+    <script src="data.js?v=20261021-1"></script>
+    <script src="aggregators.js?v=20261021-1"></script>
+    <script src="render.js?v=20261021-1"></script>
+    <script src="export.js?v=20261021-1"></script>
+    <script src="config.js?v=20261021-1"></script>
+    <script src="index.js?v=20261021-1"></script>
   </body>
 </html>
