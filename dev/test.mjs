@@ -541,6 +541,52 @@ await test('table vide puis lignes revenues (widget lié filtré) : la configura
   await page.close();
 });
 
+await test('réglages corrompus venus de Grist : normalisés, sans erreur', async () => {
+  const page = await open({ settings: { rows: 'Region', cols: null, vals: [1, {}], exclusions: 'x', fontScale: 'abc', title: 42, density: 'énorme', rendererName: 'Graphique 3D', aggregatorName: 'Inconnu', rowOrder: 7 } });
+  await page.waitForTimeout(300);
+  assert(page.errors.length === 0, 'erreurs : ' + page.errors.join(' | '));
+  assert((await page.locator('.fr-callout__title').textContent()).includes('pas encore configuré'), 'message de configuration attendu');
+  await page.close();
+});
+
+await test('données hostiles : HTML jamais interprété, NaN / Infinity / dates invalides sans erreur', async () => {
+  const X = '<img src=x onerror="window.__pwned=1">';
+  const data = Array.from({ length: 40 }, (_, i) => ({
+    id: i + 1,
+    Nom: [X, 'a'.repeat(3000), 'Ünïcödé 🚀', '', null, ['L', 'x', 'y'], ['E', 'ValueError'], true][i % 8],
+    Type: [X, 'T1'][i % 2],
+    Valeur: [1, NaN, Infinity, -Infinity, null, 1e308, 0.1 + 0.2, 'texte'][i % 8],
+    Quand: [new Date('invalid'), new Date(Date.UTC(1900, 0, 1)), null][i % 3],
+  }));
+  const page = await open({ settings: { rows: ['Nom'], cols: ['Type'], vals: ['Valeur'], aggregatorName: 'Somme', title: X } }, { data });
+  await page.locator('#output td.pvtVal').first().hover();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => grist.__openConfig());
+  await page.locator('#slot-rows .pvtTriangle').first().click();
+  await page.waitForTimeout(200);
+  const injected = await page.evaluate(() => window.__pwned || document.querySelectorAll('img').length);
+  assert(!injected, 'HTML injecté dans la page');
+  assert(page.errors.length === 0, 'erreurs : ' + page.errors.join(' | '));
+  await page.close();
+});
+
+await test('champ nommé comme une propriété JavaScript (constructor, toString) : affiché', async () => {
+  const data = Array.from({ length: 9 }, (_, i) => ({ id: i + 1, constructor: 'c' + (i % 3), toString: 't' + (i % 2) }));
+  const page = await open({ settings: { rows: ['constructor'], cols: ['toString'], vals: [], aggregatorName: 'Nombre' } }, { data });
+  assert(await page.locator('tbody th.pvtRowLabel').count() === 3, 'lignes : ' + await page.locator('tbody th.pvtRowLabel').count());
+  await page.close();
+});
+
+await test('utilisateur sans droit d’édition : « Non enregistré » et une seule notification', async () => {
+  const page = await open({ settings: base });
+  await page.evaluate(() => { window.__mockGrist.failSave = true; grist.__openConfig(); });
+  for (let i = 0; i < 3; i++) { await page.click('#font-up'); await page.waitForTimeout(450); }
+  assert((await page.locator('#save-state').textContent()) === 'Non enregistré', 'état d’enregistrement');
+  assert((await page.locator('#toast').textContent()).includes('droits'), 'notification attendue');
+  assert(await page.locator('tbody tr').count() > 1, 'le tableau doit rester utilisable');
+  await page.close();
+});
+
 await test('Échap ferme d’abord la fenêtre de filtre ouverte depuis l’aperçu, puis l’aperçu', async () => {
   const page = await open({ settings: { ...base, exclusions: { Region: ['Bretagne'] } } });
   await page.evaluate(() => grist.__openConfig());

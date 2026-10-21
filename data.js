@@ -77,11 +77,13 @@ const TCDData = (function () {
     rawRecords = rawRecords || [];
     const colIds = Object.keys(rawRecords[0] || {}).filter(n => !HIDDEN_FIELDS.has(n));
 
-    // Nom affiché de chaque colonne : libellé Grist, sinon identifiant sans « _ » (unique)
+    // Nom affiché de chaque colonne : libellé Grist, sinon identifiant sans « _ » (unique).
+    // pivottable range les champs dans des objets : un nom comme « constructor » ou « toString »
+    // y serait confondu avec une propriété native, on le distingue comme un doublon.
     const names = new Map(), cols = new Map();
     for (const colId of colIds) {
       let name = TCDGrist.label(colId) || colId.replace(/_/g, ' ');
-      if (cols.has(name) || name === 'id') { name = `${name} (${colId})`; }
+      if (cols.has(name) || name === 'id' || name in Object.prototype) { name = `${name} (${colId})`; }
       names.set(colId, name);
       cols.set(name, colId);
     }

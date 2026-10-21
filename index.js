@@ -114,7 +114,8 @@ async function saveNow() {
     await grist.setOption('settings', state.settings);
     setSaveState('saved');
   } catch (e) {
-    console.error('Enregistrement impossible :', e);
+    // Cas attendu pour un utilisateur sans droit d'édition : on prévient une fois, sans erreur
+    console.warn('Enregistrement impossible :', e.message || e);
     setSaveState('error');
     if (!state.saveErrorShown) {
       state.saveErrorShown = true;
