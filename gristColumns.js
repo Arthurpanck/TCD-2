@@ -93,20 +93,25 @@ const TCDGrist = (function () {
     return new Intl.NumberFormat(locale(), nf);
   }
 
-  /** Options de nombre d'une colonne Grist ({} : format par défaut) */
-  function columnOptions(colId) {
+  /**
+   * Options de nombre d'une colonne Grist ({} : format par défaut), avec l'arrondi choisi dans le
+   * widget (nombre de décimales, null : celui de la colonne) ; devise et séparateurs restent ceux de Grist.
+   */
+  function columnOptions(colId, decimals = null) {
     const col = meta.columns[colId];
-    return col && (col.type === 'Numeric' || col.type === 'Int') ? col.options : {};
+    const options = col && (col.type === 'Numeric' || col.type === 'Int') ? col.options : {};
+    return decimals === null ? options : { ...options, decimals, maxDecimals: decimals };
   }
 
   /**
    * Formateur de nombres d'une colonne (ou format par défaut de Grist si colId est vide).
+   * @param {number|null} decimals - arrondi du widget
    * @returns {(x: any) => string}
    */
-  function formatter(colId) {
-    const key = colId || '';
+  function formatter(colId, decimals = null) {
+    const key = `${colId || ''}|${decimals}`;
     if (cache.has(key)) { return cache.get(key); }
-    const options = columnOptions(colId);
+    const options = columnOptions(colId, decimals);
     const nf = buildNumberFormat(options);
     const parens = options.numSign === 'parens' && options.numMode !== 'scientific';
     const fn = x => {
@@ -123,8 +128,8 @@ const TCDGrist = (function () {
    * Même format, traduit en format de nombre Excel (export .xlsx), à partir des options
    * résolues du formateur : décimales, séparateur de milliers, devise et sa position.
    */
-  function excelFormat(colId) {
-    const options = columnOptions(colId);
+  function excelFormat(colId, decimals = null) {
+    const options = columnOptions(colId, decimals);
     const nf = buildNumberFormat(options);
     const r = nf.resolvedOptions();
     if (options.numMode === 'scientific') { return '0.00E+00'; }

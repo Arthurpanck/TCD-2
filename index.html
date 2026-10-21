@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/utility/icons/icons.min.css">
     <!-- ?v= : version des fichiers du widget, à changer à chaque publication pour qu'un CDN (raw.githack…)
          ne serve jamais un mélange d'anciens et de nouveaux fichiers -->
-    <link rel="stylesheet" href="styles.css?v=20261021-2">
+    <link rel="stylesheet" href="styles.css?v=20261021-3">
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
@@ -105,6 +105,17 @@
                 </select>
               </div>
 
+              <div class="fr-select-group" id="decimals-field">
+                <label class="fr-label" for="decimals">Arrondi des valeurs</label>
+                <select id="decimals" class="fr-select">
+                  <option value="">Comme dans Grist</option>
+                  <option value="0">Nombre entier</option>
+                  <option value="1">1 décimale</option>
+                  <option value="2">2 décimales</option>
+                  <option value="3">3 décimales</option>
+                </select>
+              </div>
+
               <div class="order-row">
                 <div>
                   <p class="fr-label">Tri des lignes</p>
@@ -183,13 +194,13 @@
       <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     </div>
 
-    <script src="ui.js?v=20261021-2"></script>
-    <script src="gristColumns.js?v=20261021-2"></script>
-    <script src="data.js?v=20261021-2"></script>
-    <script src="aggregators.js?v=20261021-2"></script>
-    <script src="render.js?v=20261021-2"></script>
-    <script src="export.js?v=20261021-2"></script>
-    <script src="config.js?v=20261021-2"></script>
-    <script src="index.js?v=20261021-2"></script>
+    <script src="ui.js?v=20261021-3"></script>
+    <script src="gristColumns.js?v=20261021-3"></script>
+    <script src="data.js?v=20261021-3"></script>
+    <script src="aggregators.js?v=20261021-3"></script>
+    <script src="render.js?v=20261021-3"></script>
+    <script src="export.js?v=20261021-3"></script>
+    <script src="config.js?v=20261021-3"></script>
+    <script src="index.js?v=20261021-3"></script>
   </body>
 </html>

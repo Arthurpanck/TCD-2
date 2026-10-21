@@ -24,6 +24,7 @@ const TCDConfig = (function () {
     $id('col-totals').addEventListener('change', e => app.update({ colTotals: e.target.checked }));
     $id('subtotals').addEventListener('change', e => app.update({ subtotals: e.target.checked }));
     $id('heat-scope').addEventListener('change', e => setRenderer(TCDRender.nameOf('heat', e.target.value)));
+    $id('decimals').addEventListener('change', e => app.update({ decimals: e.target.value === '' ? null : Number(e.target.value) }));
     // Boutons segmentés du DSFR, construits à partir des choix de TCDRender
     $id('renderer-seg').replaceWith(Object.assign(UI.segmented('Mise en forme', TCDRender.STYLES, null,
       v => setRenderer(TCDRender.nameOf(v, $id('heat-scope').value))), { id: 'renderer-seg' }));
@@ -369,6 +370,9 @@ const TCDConfig = (function () {
     setSegmented($id('renderer-seg'), r.kind);
     $id('heat-scope-field').hidden = r.kind !== 'heat';
     $id('heat-scope').value = r.scope;
+    $id('decimals').value = s.decimals === null ? '' : String(s.decimals);
+    // Sans nombre à arrondir (liste de valeurs, nombre de lignes), le choix n'a pas d'effet
+    $id('decimals-field').hidden = !TCDAggregators.formatOf(pvt.aggregatorName, pvt.vals, x => x).rounded;
     $id('row-totals').checked = s.rowTotals;
     $id('col-totals').checked = s.colTotals;
     $id('subtotals').checked = s.subtotals;

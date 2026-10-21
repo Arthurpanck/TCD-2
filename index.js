@@ -22,10 +22,13 @@ const DEFAULTS = {
   subtotals: true,
   density: 'standard',
   fontScale: 1,
+  // Arrondi des valeurs (nombre de décimales), null : celui de la colonne dans Grist
+  decimals: null,
 };
-// Réglages des versions précédentes qui n'existent plus (graphique, format des nombres, couleur d'accent)
+// Réglages des versions précédentes qui n'existent plus (graphique, échelle, suffixe, couleur d'accent)
 // (clickDetail : le panneau de détail a laissé place au seul filtrage des vues liées)
-const OBSOLETE = ['chartType', 'decimals', 'scale', 'suffix', 'accent', 'clickDetail'];
+const OBSOLETE = ['chartType', 'scale', 'suffix', 'accent', 'clickDetail'];
+const MAX_DECIMALS = 3;
 // Nombre de lignes affichées avant le bouton « Afficher les lignes restantes »
 const ROW_LIMIT = 1500;
 const MENU_LIMIT = 1000;
@@ -86,6 +89,9 @@ function normalizeSettings(raw, legacy = {}) {
   }
   if (!TCDRender.DENSITIES.some(([d]) => d === s.density)) { s.density = DEFAULTS.density; }
   s.fontScale = Math.min(1.4, Math.max(0.8, Number(s.fontScale) || 1));
+  // Arrondi : nombre de décimales ; « auto » et les valeurs vides des anciennes versions : celui de Grist
+  const d = s.decimals === null || s.decimals === '' || s.decimals === 'auto' ? NaN : Number(s.decimals);
+  s.decimals = Number.isInteger(d) && d >= 0 ? Math.min(d, MAX_DECIMALS) : null;
   return s;
 }
 
@@ -94,7 +100,7 @@ function update(patch) {
   state.settings = normalizeSettings({ ...state.settings, ...patch });
   applyAppearance();
   scheduleSave();
-  if (['subtotals', 'rowTotals', 'colTotals'].some(k => k in patch)) { refreshPivot(); return; }
+  if (['subtotals', 'rowTotals', 'colTotals', 'decimals'].some(k => k in patch)) { refreshPivot(); return; }
   if ('title' in patch) { applyTitle(); renderSummary(state.settings); }
   if (state.pvt) { TCDConfig.sync(state.pvt); }
   if ('density' in patch || 'fontScale' in patch) { requestAnimationFrame(restick); }
@@ -201,7 +207,7 @@ function build() {
     colOrder: s.colOrder,
     exclusions,
     dataClass: $.pivotUtilities.SubtotalPivotData,
-    aggregators: TCDAggregators.forUI(name => ds.fromAttr(name).split(' › ')[0]),
+    aggregators: TCDAggregators.forUI(name => ds.fromAttr(name).split(' › ')[0], () => state.settings.decimals),
     renderers: TCDRender.renderers({ onPivotData: pd => { state.pd = pd; }, options: rendererOptions }),
     derivedAttributes: ds.derivedAttributes,
     sorters: ds.sorters,
@@ -705,7 +711,7 @@ function exportContext() {
     aggLabel: state.aggLabel,
     title: state.settings.title.trim() || ($id('summary').querySelector('.sum-agg') ? [...$id('summary').querySelectorAll('.sum-agg, .sum-sep, .sum-dim, .sum-x')].map(n => n.textContent).join(' ') : state.aggLabel),
     filters: filters.length ? 'Filtres : ' + filters.join(' ; ') : '',
-    numFmt: f.kind === 'percent' ? '0.0%' : f.kind === 'number' ? TCDGrist.excelFormat(f.colId) : null,
+    numFmt: TCDAggregators.excelFormatOf(f, state.settings.decimals),
     collapsed: state.collapsed.rows,
     renderer: TCDRender.kindOf(state.settings.rendererName),
     accent: TCDRender.themeRgb('--background-action-high-blue-france'),

@@ -322,8 +322,55 @@ await test('format par défaut : pas de bruit de virgule flottante dans les tota
 await test('lecture seule : format par défaut de Grist', async () => {
   const page = await open({ settings: base });
   await page.evaluate(() => grist.__openConfig());
-  assert(await page.locator('#decimals, #scale, #suffix, #accent-swatches').count() === 0, 'les anciens réglages de format/couleur doivent avoir disparu');
+  assert(await page.locator('#scale, #suffix, #accent-swatches').count() === 0, 'les anciens réglages d’échelle, de suffixe et de couleur doivent avoir disparu');
   assert(await page.locator('#renderer-seg input[value="chart"]').count() === 0, 'le mode graphique doit avoir disparu');
+  await page.close();
+});
+
+await test('arrondi du widget : remplace les décimales de la colonne Grist, à l’écran et dans Excel', async () => {
+  const meta = {
+    documentSettings: { locale: 'fr-FR', currency: 'EUR' },
+    columns: { Montant: { label: 'Montant', type: 'Numeric', options: { numMode: 'currency', decimals: 2 } } },
+  };
+  const page = await open({ settings: { ...base, aggregatorName: 'Moyenne' } }, { meta });
+  const cell = () => page.locator('tbody td.pvtVal').first().textContent();
+  assert(/,\d{2}\s*€$/.test(await cell()), 'format Grist à 2 décimales attendu : ' + await cell());
+  await page.evaluate(() => grist.__openConfig());
+  assert(await page.locator('#decimals').inputValue() === '', 'par défaut : « Comme dans Grist »');
+  await page.selectOption('#decimals', '0');
+  await page.waitForTimeout(400);
+  assert(/^[\d\s\u202f\u00a0]+€$/.test((await cell()).trim()), 'arrondi entier attendu, devise conservée : ' + await cell());
+  assert((await savedSettings(page)).decimals === 0, 'arrondi non enregistré');
+  await page.click('#cfg-preview');
+  await page.click('#btn-export');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.menu-item:has-text("Excel")')]);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(await dl.path());
+  let fmt = null;
+  wb.worksheets[0].eachRow(row => row.eachCell(c => { if (!fmt && typeof c.value === 'number') { fmt = c.numFmt; } }));
+  assert(fmt && !/0\.0/.test(fmt) && /€/.test(fmt), 'format Excel sans décimale, avec devise : ' + fmt);
+  await page.close();
+});
+
+await test('arrondi : pourcentages au format français, nombre de lignes toujours entier', async () => {
+  const page = await open({ settings: { ...base, aggregatorName: 'Somme en proportion du totale', decimals: 2 } });
+  const text = (await page.locator('tbody td.pvtVal').first().textContent()).trim();
+  assert(/^\d+,\d{2}\u00a0%$/.test(text), 'pourcentage à 2 décimales, espace insécable : ' + JSON.stringify(text));
+  await page.evaluate(() => grist.__openConfig());
+  await page.selectOption('#agg-select', 'Nombre');
+  await page.waitForTimeout(400);
+  assert(await page.locator('#decimals-field').isHidden(), 'le choix d’arrondi est masqué pour un nombre de lignes');
+  assert(!/,/.test(await page.locator('tbody td.pvtVal').first().textContent()), 'un nombre de lignes reste entier');
+  await page.close();
+});
+
+await test('anciens réglages de décimales repris : « 0 » → entier, « auto » → comme dans Grist', async () => {
+  const page = await open({ settings: { ...base, aggregatorName: 'Moyenne', decimals: '0' } });
+  assert(!/,/.test(await page.locator('tbody td.pvtVal').first().textContent()), 'ancien réglage « 0 » non appliqué');
+  await page.evaluate(() => window.__mockGrist.emitOptions({ settings: { ...{ rows: ['Region'], cols: ['Annee'], vals: ['Montant'] }, aggregatorName: 'Moyenne', decimals: 'auto' } }));
+  await page.waitForTimeout(400);
+  await page.evaluate(() => grist.__openConfig());
+  assert(await page.locator('#decimals').inputValue() === '', '« auto » : comme dans Grist');
   await page.close();
 });
 

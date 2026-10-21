@@ -32,7 +32,7 @@ Les réglages sont enregistrés automatiquement dans le widget.
 - Filtres rapides depuis la barre de résumé
 - Sous-totaux par groupe (subtotal.js), repliables en cliquant sur un groupe ou sur l'en-tête d'un niveau
 - Mise en forme : tableau, carte de chaleur (globale, par ligne, par colonne) ou barres de données
-- Nombres au format de la colonne dans Grist (devise, pourcentage, décimales, séparateurs)
+- Nombres au format de la colonne dans Grist (devise, pourcentage, décimales, séparateurs), avec un arrondi propre au tableau si besoin (entier, 1 à 3 décimales) : affichage et export Excel, les calculs gardent les valeurs exactes
 - Export Excel mis en forme (.xlsx) : formats de nombres des colonnes Grist (devise, %, décimales), sous-totaux en plan repliable (groupes repliés dans le widget repliés dans Excel), totaux en gras, en-têtes et volets figés, carte de chaleur et barres en mise en forme conditionnelle
 - Export des données brutes : copie pour un tableur, CSV (séparateur « ; », compatible Excel français)
 

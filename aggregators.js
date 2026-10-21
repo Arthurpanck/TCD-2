@@ -6,7 +6,15 @@
 const TCDAggregators = (function () {
   const tpl = $.pivotUtilities.aggregatorTemplates;
   const subTpl = $.pivotUtilities.subtotalAggregatorTemplates;
-  const frPct = $.pivotUtilities.numberFormat({ digitsAfterDecimal: 1, scaler: 100, suffix: ' %', thousandsSep: ' ', decimalSep: ',' });
+  /** Pourcentage à la française (« 12,5 % », espaces insécables), avec le nombre de décimales voulu */
+  const pctFormats = new Map();
+  function percentFormat(digits) {
+    if (!pctFormats.has(digits)) {
+      pctFormats.set(digits, $.pivotUtilities.numberFormat({ digitsAfterDecimal: digits, scaler: 100, suffix: '\u00a0%', thousandsSep: '\u00a0', decimalSep: ',' }));
+    }
+    return pctFormats.get(digits);
+  }
+  const frPct = percentFormat(1);
 
   /** Moyenne pondérée (absente de pivottable), écrite comme ses modèles d'agrégateurs */
   function weightedAverage([val, coef] = []) {
@@ -121,30 +129,40 @@ const TCDAggregators = (function () {
   /**
    * Format d'affichage d'un calcul : pourcentage, liste, ou format de nombre d'une colonne Grist
    * (colId null : format par défaut de Grist). Partagé par l'affichage et l'export Excel.
+   * `rounded` : l'arrondi du widget s'applique (pas aux nombres de lignes, toujours entiers).
    * @param {(name: string) => string} colIdOf - nom de champ affiché → identifiant de colonne Grist
-   * @returns {{kind: 'percent'|'list'|'number', colId?: string|null}}
+   * @returns {{kind: 'percent'|'list'|'number', colId?: string|null, rounded: boolean}}
    */
   function formatOf(name, vals, colIdOf) {
     const k = kind(name);
-    if (k === 'percent' || k === 'list') { return { kind: k }; }
-    return { kind: 'number', colId: KEEPS_COLUMN_FORMAT.has(name) && vals && vals[0] ? colIdOf(vals[0]) : null };
+    if (k === 'percent' || k === 'list') { return { kind: k, rounded: k === 'percent' }; }
+    return { kind: 'number', colId: KEEPS_COLUMN_FORMAT.has(name) && vals && vals[0] ? colIdOf(vals[0]) : null, rounded: k !== 'count' };
+  }
+
+  /** Format Excel des valeurs d'un calcul (export .xlsx), avec l'arrondi du widget */
+  function excelFormatOf(f, decimals) {
+    const d = f.rounded ? decimals : null;
+    if (f.kind === 'percent') { const n = d === null ? 1 : d; return (n ? '0.' + '0'.repeat(n) : '0') + '%'; }
+    return f.kind === 'number' ? TCDGrist.excelFormat(f.colId, d) : null;
   }
 
   /**
    * Agrégateurs transmis à pivotUI : ceux de la librairie, avec le format de nombre de la colonne Grist
-   * (devise, pourcentage, décimales…) ou, à défaut, le format par défaut de Grist.
+   * (devise, décimales…) ou, à défaut, le format par défaut de Grist, et l'arrondi choisi dans le widget.
+   * Les pourcentages, y compris ceux de la locale de pivottable, prennent tous le même format français.
+   * @param {() => number|null} decimals - arrondi courant (lu à chaque calcul)
    */
-  function forUI(colIdOf) {
+  function forUI(colIdOf, decimals) {
     const out = {};
     for (const name of Object.keys(catalogue)) {
       out[name] = vals => {
         const base = catalogue[name](vals);
         const f = formatOf(name, vals, colIdOf);
-        if (f.kind !== 'number') { return base; }
-        const formatter = TCDGrist.formatter(f.colId);
+        if (f.kind === 'list') { return base; }
         return (data, rowKey, colKey) => {
           const agg = base(data, rowKey, colKey);
-          agg.format = formatter;
+          const d = f.rounded ? decimals() : null;
+          agg.format = f.kind === 'percent' ? percentFormat(d === null ? 1 : d) : TCDGrist.formatter(f.colId, d);
           return agg;
         };
       };
@@ -167,5 +185,5 @@ const TCDAggregators = (function () {
     return `${label} de ${v[0]}`;
   }
 
-  return { GROUPS, LABELS, normalizeName, inputLabels, formatOf, forUI, describe };
+  return { GROUPS, LABELS, normalizeName, inputLabels, formatOf, excelFormatOf, forUI, describe };
 })();
