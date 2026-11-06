@@ -107,17 +107,10 @@ const TCDExport = (function () {
   // ---------------------------------------------------------------------------
 
   let excelJs = null;
+  /** ExcelJS chargé une fois par jQuery ($.getScript, sans le paramètre anti-cache) ; nouvel essai après un échec */
   function loadExcelJs() {
-    if (!excelJs) {
-      excelJs = new Promise((resolve, reject) => {
-        if (window.ExcelJS) { return resolve(window.ExcelJS); }
-        const script = document.createElement('script');
-        script.src = EXCELJS_URL;
-        script.onload = () => resolve(window.ExcelJS);
-        script.onerror = () => { excelJs = null; reject(new Error('ExcelJS indisponible')); };
-        document.head.append(script);
-      });
-    }
+    excelJs = excelJs || Promise.resolve(window.ExcelJS || $.ajax({ url: EXCELJS_URL, dataType: 'script', cache: true }).then(() => window.ExcelJS))
+      .catch(() => { excelJs = null; throw new Error('ExcelJS indisponible'); });
     return excelJs;
   }
 

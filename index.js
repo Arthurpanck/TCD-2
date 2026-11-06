@@ -58,6 +58,8 @@ const state = {
   saveErrorShown: false,
 };
 const $host = $('#app');
+/** Tableau rendu par subtotal.js, s'il y en a un */
+const currentTable = () => $id('output').querySelector('table.pvtTable');
 
 // ---------------------------------------------------------------------------
 // Réglages
@@ -143,9 +145,8 @@ function setSaveState(kind) {
  * masquée à l'écran mais lue par les lecteurs d'écran (variante fr-table--no-caption du DSFR)
  */
 function applyTitle() {
-  const out = $id('output');
   const title = state.settings.title.trim();
-  const table = out.querySelector('table.pvtTable');
+  const table = currentTable();
   if (!table) { return; }
   let caption = table.querySelector(':scope > caption');
   if (!title) { if (caption) { caption.remove(); } return; }
@@ -475,18 +476,19 @@ function showTooltip(td) {
     ...(lines.length ? lines : [el('div', { class: 'tt-line' }, el('span', {}, 'Ensemble des données'))]),
     el('div', { class: 'tt-value' }, el('span', {}, state.aggLabel), el('b', {}, td.textContent)),
     el('div', { class: 'tt-hint' }, td.classList.contains('is-selected') ? 'Cliquez pour tout réafficher dans les vues liées' : 'Cliquez pour filtrer les vues liées'));
-  const r = td.getBoundingClientRect();
   tooltip.className = 'tooltip fr-tooltip fr-placement fr-placement--top fr-tooltip--shown';
   tooltip.hidden = false;
-  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
-  const below = r.top - th < 8;
-  tooltip.classList.toggle('fr-placement--top', !below);
-  tooltip.classList.toggle('fr-placement--bottom', below);
-  const center = r.left + r.width / 2;
-  const left = Math.max(8, Math.min(center - tw / 2, window.innerWidth - tw - 8));
-  tooltip.style.setProperty('--arrow-x', (center - left - tw / 2) + 'px');
-  tooltip.style.left = left + 'px';
-  tooltip.style.top = (below ? r.bottom : r.top - th) + 'px';
+  // position() de jQuery UI : au-dessus de la case, retourné dessous faute de place ; la flèche suit la case
+  $(tooltip).position({
+    my: 'center bottom', at: 'center top', of: td, collision: 'fit flip',
+    using(pos, fb) {
+      const below = fb.vertical === 'top';
+      tooltip.classList.toggle('fr-placement--top', !below);
+      tooltip.classList.toggle('fr-placement--bottom', below);
+      tooltip.style.setProperty('--arrow-x', (fb.target.left + fb.target.width / 2 - pos.left - fb.element.width / 2) + 'px');
+      $(tooltip).css(pos);
+    },
+  });
 }
 
 function hideTooltip() {
@@ -518,7 +520,7 @@ function setupTableInteractions() {
     // Groupe replié ou déplié par subtotal.js : on mémorise l'état et on recale les colonnes figées
     if (e.target.closest('th') && e.isTrusted) {
       requestAnimationFrame(() => {
-        const table = out.querySelector('table.pvtTable');
+        const table = currentTable();
         if (table) { saveCollapsed(table); TCDRender.stick(table); }
       });
     }
@@ -533,7 +535,7 @@ function setupTableInteractions() {
 }
 
 function restick() {
-  const table = $id('output').querySelector('table.pvtTable');
+  const table = currentTable();
   if (table) { TCDRender.stick(table); }
 }
 
@@ -586,7 +588,7 @@ function applyRowLimit(table) {
 
 function showAllRows() {
   state.rowLimit = Infinity;
-  const table = $id('output').querySelector('table.pvtTable');
+  const table = currentTable();
   table.querySelectorAll('tr.tcd-over').forEach(tr => tr.classList.remove('tcd-over'));
   table.querySelectorAll('tr.tcd-more').forEach(tr => tr.remove());
   restick();
@@ -594,7 +596,7 @@ function showAllRows() {
 
 /** Navigation au clavier : flèches entre les cellules, Entrée pour sélectionner */
 function onTableKey(e) {
-  const table = $id('output').querySelector('table.pvtTable');
+  const table = currentTable();
   if (!table || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' ', 'Home', 'End'].includes(e.key)) { return; }
   const current = document.activeElement && document.activeElement.matches && document.activeElement.matches(VALUE_CELLS) ? document.activeElement : null;
   const cellsOf = tr => [...tr.querySelectorAll(VALUE_CELLS)].filter(isShown);
@@ -851,7 +853,13 @@ function start() {
   $id('btn-export').addEventListener('click', e => openExportMenu(e.currentTarget));
   $id('cfg-preview').addEventListener('click', openPreview);
   $id('preview-close').addEventListener('click', closePreview);
-  $id('preview').addEventListener('mousedown', e => { if (e.target === e.currentTarget) { closePreview(); } });
+  // Clic à l'extérieur : ferme le menu ouvert et la fenêtre de filtre (équivaut à « Annuler ») ;
+  // un clic sur le fond de l'aperçu ferme l'aperçu
+  document.addEventListener('mousedown', e => {
+    if (!UI.menuHolds(e.target)) { UI.closePopover(); }
+    if (!e.target.closest('.pvtFilterBox, .pvtTriangle, .filter-pill, .sum-filters, .popover')) { TCDConfig.closeFilters(); }
+    if (e.target === $id('preview')) { closePreview(); }
+  }, true);
   // Échap ferme ce qui est ouvert, du plus proche au plus lointain : menu, fenêtre de filtre, aperçu ;
   // sinon il désélectionne la case
   document.addEventListener('keydown', e => {

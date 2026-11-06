@@ -40,12 +40,6 @@ const TCDConfig = (function () {
     $id('field-search').addEventListener('input', filterFieldList);
     $id('cfg-done').addEventListener('click', () => app.closeConfig());
     $id('cfg-revert').addEventListener('click', () => app.revert());
-
-    // Fenêtres de filtre : fermeture par clic à l'extérieur (équivaut à « Annuler ») ; Échap : voir index.js
-    document.addEventListener('mousedown', e => {
-      if (e.target.closest('.pvtFilterBox, .pvtTriangle, .filter-pill, .sum-filters, .popover')) { return; }
-      closeFilterBoxes();
-    });
   }
 
   function setSegmented(root, value) {
@@ -288,7 +282,7 @@ const TCDConfig = (function () {
     const anchor = visible(pendingAnchor) ? pendingAnchor : e.currentTarget;
     pendingAnchor = null;
     document.querySelectorAll('#filter-layer .pvtFilterBox').forEach(b => { if (b !== box) { b.style.display = 'none'; } });
-    UI.placeNear(box, anchor.getBoundingClientRect());
+    UI.placeNear(box, anchor);
     const search = box.querySelector('input.pvtSearch');
     if (search) { search.focus({ preventScroll: true }); }
   }

@@ -372,7 +372,8 @@ a.order-btn.fr-btn { width: 100%; max-width: 100%; margin: 0; justify-content: s
   overflow: auto;
   animation: pop-in .12s ease;
 }
-@keyframes pop-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* Fondu seul : position() de jQuery UI mesure l'élément pendant l'animation, un déplacement fausserait sa place */
+@keyframes pop-in { from { opacity: 0; } to { opacity: 1; } }
 .menu { display: flex; flex-direction: column; gap: 1px; }
 .menu-title { padding: .5rem .5rem .25rem; font-size: .75rem; font-weight: 700; color: var(--text-mention-grey); }
 .menu-sep { height: 1px; margin: .25rem 0; background: var(--border-default-grey); }

@@ -20,23 +20,24 @@ const UI = (function () {
     return node;
   }
 
-  /** Place un élément flottant sous `r` (au-dessus faute de place), sans sortir de la fenêtre */
-  function placeNear(node, r, alignEnd = false) {
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const w = node.offsetWidth, h = node.offsetHeight;
-    let top = r.bottom + 6;
-    if (top + h > vh - 8 && r.top - h - 6 >= 8) { top = r.top - h - 6; }
-    node.style.left = Math.max(8, Math.min(alignEnd ? r.right - w : r.left, vw - w - 8)) + 'px';
-    node.style.top = Math.max(8, Math.min(top, vh - h - 8)) + 'px';
+  /**
+   * Place un élément flottant sous `target` (au-dessus faute de place), sans sortir de la fenêtre :
+   * position() de jQuery UI, collisions « fit » à l'horizontale et « flip » à la verticale.
+   */
+  function placeNear(node, target, alignEnd = false) {
+    const side = alignEnd ? 'right' : 'left';
+    $(node).position({ my: `${side} top`, at: `${side} bottom+6`, of: target, collision: 'fit flip' });
   }
 
   function position() {
     if (!anchor || pop.hidden) { return; }
     pop.style.maxHeight = (window.innerHeight - 16) + 'px';
-    placeNear(pop, anchor.getBoundingClientRect(), align === 'end');
+    placeNear(pop, anchor, align === 'end');
   }
 
   function isOpenFor(el) { return !pop.hidden && anchor === el; }
+  /** Le menu ouvert, ou l'élément qui l'a ouvert, contient-il `node` ? */
+  const menuHolds = node => !pop.hidden && (pop.contains(node) || Boolean(anchor && anchor.contains(node)));
 
   function openPopover(anchorEl, content, opts = {}) {
     closePopover();
@@ -96,10 +97,7 @@ const UI = (function () {
     toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2600);
   }
 
-  document.addEventListener('mousedown', e => {
-    if (!pop.hidden && !pop.contains(e.target) && !(anchor && anchor.contains(e.target))) { closePopover(); }
-  }, true);
   window.addEventListener('resize', () => position());
 
-  return { el, $id, placeNear, openPopover, closePopover, isOpenFor, menu, segmented, toast };
+  return { el, $id, placeNear, openPopover, closePopover, isOpenFor, menuHolds, menu, segmented, toast };
 })();
