@@ -857,7 +857,8 @@ function start() {
   // un clic sur le fond de l'aperçu ferme l'aperçu
   document.addEventListener('mousedown', e => {
     if (!UI.menuHolds(e.target)) { UI.closePopover(); }
-    if (!e.target.closest('.pvtFilterBox, .pvtTriangle, .filter-pill, .sum-filters, .popover')) { TCDConfig.closeFilters(); }
+    const keepsFilter = e.target instanceof Element && e.target.closest('.pvtFilterBox, .pvtTriangle, .filter-pill, .sum-filters, .popover');
+    if (!keepsFilter) { TCDConfig.closeFilters(); }
     if (e.target === $id('preview')) { closePreview(); }
   }, true);
   // Échap ferme ce qui est ouvert, du plus proche au plus lointain : menu, fenêtre de filtre, aperçu ;
